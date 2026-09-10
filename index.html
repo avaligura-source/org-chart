@@ -132,7 +132,7 @@
   <button class="tb opt" id="undoBtn" title="Ctrl/Cmd+Z">↶</button>
   <button class="tb opt" id="redoBtn" title="Ctrl/Cmd+Shift+Z">↷</button>
   <div class="spacer"></div>
-  <div class="legend opt"><span><i style="background:var(--md)"></i>Моушн дизайнери</span><span><i style="background:var(--mkt)"></i>Маркетологи</span></div>
+  <div class="legend opt"><span><i style="background:var(--md)"></i>Моушн дизайнери</span><span><i style="background:var(--mkt)"></i>CMM</span></div>
   <span id="status" class="ok">Збережено</span>
   <button class="tb opt" id="exportBtn">Експорт</button>
   <button class="tb opt" id="importBtn">Імпорт</button>
@@ -172,7 +172,7 @@ const viewport = $('#viewport'), world = $('#world'), cardsEl = $('#cards'), edg
 // ---------- state ----------
 function demo() {
   // Motion Team — new structure. kind: 'md' motion designer, 'mkt' marketer, 'org' group card
-  const MD = 'Motion Designer', MKT = 'Marketer', HELP = n => `На період пошуку MD буде допомога частково з ${n}`;
+  const MD = 'Motion Designer', MKT = 'CMM', HELP = n => `На період пошуку MD буде допомога частково з ${n}`;
   const teams = [
     ['Indoor Walking', '#1a9b4b', [['Nataliia Mak', 'Co-lead'], ['Dmytro Sha', MD], ['Taras Kol', MD]], [['Anna Ant', 50]]],
     ['Military', '#2f6bff', [['Anastasiia Zad', 'Co-lead'], ['Mariana Tro', MD], ['Taras Bud', MD], ['Yelyzaveta Hul', 'Freelance']], [['Anastasiia Bur', 100], ['Dmytro Dud', 100]]],
@@ -224,6 +224,7 @@ function normalize(s) {
     });
     s.links = out; s.v = 3;
   }
+  if (s.v < 4) { s.people.forEach(p => { if (p.title === 'Marketer') p.title = 'CMM'; }); s.v = 4; } // v4: Marketer → CMM
   return s;
 }
 let S, fresh = false;
@@ -351,7 +352,7 @@ function renderUnits() {
     const bx = unitBox(u, hidden); if (!bx) return '';
     const md = capacity(u, 'md'), mkt = capacity(u, 'mkt'), diff = md - mkt;
     return `<div class="unit${sel.unit === u.id ? ' sel' : ''}" data-uid="${u.id}" style="left:${bx.x}px;top:${bx.y}px;width:${bx.r - bx.x}px;height:${bx.b - bx.y}px;border-color:${u.color};background:${u.color}10">
-      <div class="unit-label" data-unit="${u.id}" style="background:${u.color}" title="Моушн дизайнери можуть зробити ${md}, маркетологи — ${mkt}. Різниця ${diff >= 0 ? '+' : ''}${diff}">${esc(u.name)}<span class="st"><i class="md">MD ${md}</i><i class="mkt">MKT ${mkt}</i><i class="${diff >= 0 ? 'pos' : 'neg'}">${diff > 0 ? '+' : diff < 0 ? '−' : ''}${Math.abs(diff)}</i></span></div></div>`;
+      <div class="unit-label" data-unit="${u.id}" style="background:${u.color}" title="Моушн дизайнери можуть зробити ${md}, CMM — ${mkt}. Різниця ${diff >= 0 ? '+' : ''}${diff}">${esc(u.name)}<span class="st"><i class="md">MD ${md}</i><i class="mkt">CMM ${mkt}</i><i class="${diff >= 0 ? 'pos' : 'neg'}">${diff > 0 ? '+' : diff < 0 ? '−' : ''}${Math.abs(diff)}</i></span></div></div>`;
   }).join('');
 }
 
@@ -582,7 +583,7 @@ function openPerson(id, focus) {
     <div class="field"><label>Імʼя</label><input type="text" id="pName" value="${esc(p.name)}"></div>
     <div class="field"><label>Посада</label><input type="text" id="pTitle" value="${esc(p.title)}"></div>
     <div class="field"><label>Нотатка</label><textarea id="pNote" placeholder="Коментар, контекст…">${esc(p.note || '')}</textarea></div>
-    <div class="field"><label>Роль</label><div class="kind-pick">${[['md','Моушн дизайнер'],['mkt','Маркетолог'],['org','Група']].map(([k,l]) => `<button data-kind="${k}" class="${(p.kind || 'md') === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+    <div class="field"><label>Роль</label><div class="kind-pick">${[['md','Моушн дизайнер'],['mkt','CMM'],['org','Група']].map(([k,l]) => `<button data-kind="${k}" class="${(p.kind || 'md') === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
     <div class="field"><label>Скільки тасок може зробити</label>
       <div class="stepper"><button id="pDec">−</button><input type="number" min="0" id="pTasks" value="${+p.tasks || 0}" style="width:90px"><button id="pInc">+</button></div></div>
     <div class="field"><label>Юніти</label><div class="checks">${S.units.length ? S.units.map(u => `<label><input type="checkbox" data-unit="${u.id}" ${u.members.includes(id) ? 'checked' : ''}><span style="width:10px;height:10px;border-radius:50%;background:${u.color}"></span>${esc(u.name)}</label>`).join('') : '<div class="hint">Юнітів ще немає</div>'}</div></div>
@@ -629,8 +630,8 @@ function openUnit(id, focus) {
     <div class="stat"><span>Людей</span><b>${u.members.length}</b></div>
     <div class="stat"><span>Тасок сумарно (можуть зробити)</span><b>${tasks}</b></div>
     <div class="stat"><span>…з них моушн дизайнери</span><b>${u.members.map(byId).filter(p => p && (p.kind || 'md') === 'md').reduce((s, p) => s + (+p.tasks || 0), 0)}</b></div>
-    <div class="stat"><span>…з них маркетологи</span><b>${u.members.map(byId).filter(p => p && p.kind === 'mkt').reduce((s, p) => s + (+p.tasks || 0), 0)}</b></div>
-    <div class="stat" style="margin-bottom:12px"><span>Різниця MD − MKT</span><b style="color:${capacity(u,'md') - capacity(u,'mkt') >= 0 ? '#137a3a' : '#c62828'}">${capacity(u,'md') - capacity(u,'mkt')}</b></div>
+    <div class="stat"><span>…з них CMM</span><b>${u.members.map(byId).filter(p => p && p.kind === 'mkt').reduce((s, p) => s + (+p.tasks || 0), 0)}</b></div>
+    <div class="stat" style="margin-bottom:12px"><span>Різниця MD − CMM</span><b style="color:${capacity(u,'md') - capacity(u,'mkt') >= 0 ? '#137a3a' : '#c62828'}">${capacity(u,'md') - capacity(u,'mkt')}</b></div>
     <div class="field"><label>Хто входить у юніт</label><div class="checks">${S.people.map(p => `<label><input type="checkbox" data-p="${p.id}" ${u.members.includes(p.id) ? 'checked' : ''}>${esc(p.name)} <span class="hint">${esc(p.title)}</span></label>`).join('')}</div></div>
     <div class="row" style="margin:16px 0"><button class="tb danger" id="uDel">Видалити юніт</button></div>
     <p class="hint">Тягни за назву юніту на полотні, щоб перемістити всю групу.</p>`;
