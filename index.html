@@ -84,6 +84,7 @@
   .unit-label .st i.md{color:var(--md)} .unit-label .st i.mkt{color:#c46a00}
   .unit-label .st i.pos{background:#e3f6ea;color:#137a3a} .unit-label .st i.neg{background:#fde8e8;color:#c62828}
   .unit.sel{border-style:solid;border-width:2px}
+  .unit.drop{border-style:solid;border-width:3px;box-shadow:0 0 0 5px rgba(26,155,75,.25)}
 
   /* zoom */
   .zoom{position:fixed;right:18px;top:70px;display:flex;flex-direction:column;gap:8px;z-index:15}
@@ -335,8 +336,8 @@ function renderEdges(temp) {
   if (temp) html += `<path class="temp" d="${temp}"/>`;
   edgesEl.innerHTML = html;
 }
-function unitBox(u, hidden) {
-  const ms = u.members.map(byId).filter(p => p && !hidden.has(p.id));
+function unitBox(u, hidden, exclude) {
+  const ms = u.members.map(byId).filter(p => p && !hidden.has(p.id) && !exclude?.has(p.id));
   if (!ms.length) return null;
   const pad = 18;
   return {
@@ -351,7 +352,7 @@ function renderUnits() {
   unitsEl.innerHTML = S.units.map(u => {
     const bx = unitBox(u, hidden); if (!bx) return '';
     const md = capacity(u, 'md'), mkt = capacity(u, 'mkt'), diff = md - mkt;
-    return `<div class="unit${sel.unit === u.id ? ' sel' : ''}" data-uid="${u.id}" style="left:${bx.x}px;top:${bx.y}px;width:${bx.r - bx.x}px;height:${bx.b - bx.y}px;border-color:${u.color};background:${u.color}10">
+    return `<div class="unit${sel.unit === u.id ? ' sel' : ''}${drag?.target === u.id ? ' drop' : ''}" data-uid="${u.id}" style="left:${bx.x}px;top:${bx.y}px;width:${bx.r - bx.x}px;height:${bx.b - bx.y}px;border-color:${u.color};background:${u.color}10">
       <div class="unit-label" data-unit="${u.id}" style="background:${u.color}" title="Моушн дизайнери можуть зробити ${md}, CMM — ${mkt}. Різниця ${diff >= 0 ? '+' : ''}${diff}">${esc(u.name)}<span class="st"><i class="md">MD ${md}</i><i class="mkt">CMM ${mkt}</i><i class="${diff >= 0 ? 'pos' : 'neg'}">${diff > 0 ? '+' : diff < 0 ? '−' : ''}${Math.abs(diff)}</i></span></div></div>`;
   }).join('');
 }
@@ -421,6 +422,19 @@ function autoLayout() {
 
 // ---------- interactions ----------
 let drag = null;
+// unit whose frame contains the grabbed card's centre (ignoring the dragged cards themselves)
+function dropUnit(id, ids) {
+  const p = byId(id), cx = p.x + W / 2, cy = p.y + H / 2, hidden = hiddenSet(), excl = new Set(ids);
+  let best = null, area = Infinity;
+  S.units.forEach(u => {
+    if (u.members.includes(id)) return;
+    const bx = unitBox(u, hidden, excl);
+    if (bx && cx >= bx.x && cx <= bx.r && cy >= bx.y && cy <= bx.b) {
+      const a = (bx.r - bx.x) * (bx.b - bx.y); if (a < area) { area = a; best = u; }
+    }
+  });
+  return best;
+}
 viewport.addEventListener('pointerdown', e => {
   if (e.button !== 0 || e.target.closest('button')) return;
   const w = toWorld(e.clientX, e.clientY);
@@ -459,6 +473,7 @@ window.addEventListener('pointermove', e => {
       o.p.x = Math.round((o.x + dx) / 10) * 10; o.p.y = Math.round((o.y + dy) / 10) * 10;
       const el = cardsEl.querySelector(`[data-id="${o.p.id}"]`); if (el) { el.style.left = o.p.x + 'px'; el.style.top = o.p.y + 'px'; }
     });
+    if (drag.mode === 'card') drag.target = dropUnit(drag.id, drag.ids)?.id || null;
     renderEdges(); renderUnits();
   } else if (drag.mode === 'connect') {
     const a = byId(drag.from);
@@ -475,7 +490,14 @@ window.addEventListener('pointerup', e => {
     if (d.moved) viewChanged();
     else { sel = {people: new Set(), link: null, unit: null}; closePanel(); render(); }
   } else if (d.mode === 'card') {
-    if (d.moved) commit();
+    if (d.moved && d.target) {
+      // moved into another unit: membership (and so MD/CMM totals) follow the person
+      const to = unitById(d.target);
+      d.ids.forEach(id => { S.units.forEach(u => u.members = u.members.filter(m => m !== id)); to.members.push(id); });
+      const t = d.ids.reduce((s, id) => s + (+byId(id).tasks || 0), 0);
+      commit();
+      toast(`${d.ids.length > 1 ? d.ids.length + ' ос.' : byId(d.id).name} → ${to.name}: +${t} ${taskWord(t)}`);
+    } else if (d.moved) commit();
     else {
       if (d.shift) { sel.people.has(d.id) ? sel.people.delete(d.id) : sel.people.add(d.id); sel.link = null; sel.unit = null; }
       else sel = {people: new Set([d.id]), link: null, unit: null};
