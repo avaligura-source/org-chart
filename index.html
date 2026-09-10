@@ -79,6 +79,10 @@
   /* units */
   .unit{position:absolute;border:1.5px dashed;border-radius:14px}
   .unit-label{position:absolute;left:12px;top:-14px;padding:4px 10px;border-radius:999px;color:#fff;font-size:12px;font-weight:600;white-space:nowrap;cursor:move;user-select:none;box-shadow:var(--shadow)}
+  .gtot{position:absolute;left:calc(100% + 12px);top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+  .gtot i{font-style:normal;background:#fff;border:1px solid var(--border);border-radius:999px;padding:3px 10px;font-weight:650;font-size:13px;white-space:nowrap;box-shadow:var(--shadow)}
+  .gtot i.md{color:var(--md)} .gtot i.mkt{color:#c46a00}
+  .gtot i.pos{background:#e3f6ea;color:#137a3a;border-color:#bfe6cd} .gtot i.neg{background:#fde8e8;color:#c62828;border-color:#f5c6c6}
   .unit-label .st{display:inline-flex;gap:4px;margin-left:8px;vertical-align:1px}
   .unit-label .st i{font-style:normal;background:rgba(255,255,255,.95);color:var(--text);border-radius:999px;padding:1px 7px;font-weight:600;font-size:11px}
   .unit-label .st i.md{color:var(--md)} .unit-label .st i.mkt{color:#c46a00}
@@ -265,6 +269,23 @@ const byId = id => S.people.find(p => p.id === id);
 const unitById = id => S.units.find(u => u.id === id);
 const unitOf = id => S.units.find(u => u.members.includes(id));
 const nameOf = id => byId(id)?.name ?? unitById(id)?.name ?? '?';
+// totals for a group card: the top group card counts everyone, other group cards count what hangs below them
+function groupTotals(p) {
+  const incoming = new Set(S.links.map(l => l.to));
+  const top = S.people.filter(q => q.kind === 'org' && !incoming.has(q.id)).sort((a, b) => a.y - b.y)[0];
+  let people;
+  if (top && top.id === p.id) people = S.people;
+  else {
+    const seen = new Set(), walk = id => childrenOf(id).forEach(c => {
+      if (seen.has(c)) return; seen.add(c);
+      unitById(c)?.members.forEach(m => { seen.add(m); walk(m); });
+      walk(c);
+    });
+    walk(p.id); people = S.people.filter(q => seen.has(q.id));
+  }
+  const sum = k => people.filter(q => (q.kind || 'md') === k).reduce((s, q) => s + (+q.tasks || 0), 0);
+  return {md: sum('md'), mkt: sum('mkt')};
+}
 const capacity = (u, kind) => u.members.map(byId).filter(p => p && (p.kind || 'md') === kind).reduce((s, p) => s + (+p.tasks || 0), 0);
 const childrenOf = id => S.links.filter(l => l.from === id).map(l => l.to);
 
@@ -300,6 +321,7 @@ function renderCards() {
       ${p.note ? `<div class="note" title="${esc(p.note)}">ⓘ</div>` : ''}
       ${kids ? `<button class="kids" data-act="toggle">${kids} ${chevron(!p.collapsed)}</button>` : ''}
       <div class="tasks${t ? '' : ' none'}"${p.kind === 'org' ? ' hidden' : ''}><button data-act="dec">−</button>&nbsp;<b>${t}</b>&nbsp;<span class="tw">${taskWord(t)}</span>&nbsp;<button data-act="inc">+</button></div>
+      ${p.kind === 'org' ? (g => `<div class="gtot" title="Загалом: моушн дизайнери ${g.md}, CMM ${g.mkt}"><i class="md">MD ${g.md}</i><i class="mkt">CMM ${g.mkt}</i><i class="${g.md - g.mkt >= 0 ? 'pos' : 'neg'}">${g.md - g.mkt > 0 ? '+' : g.md - g.mkt < 0 ? '−' : ''}${Math.abs(g.md - g.mkt)}</i></div>`)(groupTotals(p)) : ''}
       <div class="handle" title="Потягни до іншої картки, щоб з'єднати"></div>
     </div>`;
   }).join('');
