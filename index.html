@@ -70,17 +70,18 @@
   .tasks b{color:var(--text);font-weight:650}
   .note{position:absolute;top:5px;right:8px;color:var(--muted);font-size:14px;cursor:help}
   .field textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font:inherit;resize:vertical;min-height:60px}
-  .tasks.none{opacity:0}
-  .card:hover .tasks.none,.card.sel .tasks.none{opacity:1}
+  .tasks.none{opacity:.55}
   .tasks button{display:none;border:0;background:#fff;border-radius:50%;width:18px;height:18px;line-height:18px;padding:0;font-size:13px;color:var(--text)}
   .card:hover .tasks button,.card.sel .tasks button{display:inline-block}
   .tasks button:hover{background:#dfe3ea}
-  .tasks.none b,.tasks.none .tw{display:none}
 
   /* units */
   .unit{position:absolute;border:1.5px dashed;border-radius:14px}
   .unit-label{position:absolute;left:12px;top:-14px;padding:4px 10px;border-radius:999px;color:#fff;font-size:12px;font-weight:600;white-space:nowrap;cursor:move;user-select:none;box-shadow:var(--shadow)}
-  .unit-label span{opacity:.85;font-weight:500}
+  .unit-label .st{display:inline-flex;gap:4px;margin-left:8px;vertical-align:1px}
+  .unit-label .st i{font-style:normal;background:rgba(255,255,255,.95);color:var(--text);border-radius:999px;padding:1px 7px;font-weight:600;font-size:11px}
+  .unit-label .st i.md{color:var(--md)} .unit-label .st i.mkt{color:#c46a00}
+  .unit-label .st i.pos{background:#e3f6ea;color:#137a3a} .unit-label .st i.neg{background:#fde8e8;color:#c62828}
   .unit.sel{border-style:solid;border-width:2px}
 
   /* zoom */
@@ -211,14 +212,24 @@ function demo() {
 function normalize(s) {
   s.people ||= []; s.links ||= []; s.units ||= []; s.view ||= {x: 0, y: 0, k: 1};
   const ids = new Set(s.people.map(p => p.id));
+  s.units.forEach(u => { u.members = (u.members || []).filter(id => ids.has(id)); ids.add(u.id); });
   s.links = s.links.filter(l => ids.has(l.from) && ids.has(l.to));
-  s.units.forEach(u => u.members = (u.members || []).filter(id => ids.has(id)));
+  if ((s.v || 0) < 3) {
+    // v3: no lines between people inside units — person links are lifted to their units
+    const unitOf = id => s.units.find(u => u.members.includes(id)), seen = new Set(), out = [];
+    s.links.forEach(l => {
+      const f = unitOf(l.from)?.id || l.from, t = unitOf(l.to)?.id || l.to, k = f + '>' + t;
+      if (f !== t && !seen.has(k)) { seen.add(k); out.push({from: f, to: t}); }
+    });
+    s.links = out; s.v = 3;
+  }
   return s;
 }
 let S, fresh = false;
 try { S = JSON.parse(localStorage.getItem(KEY)); } catch {}
 if (!S || !S.people) { S = demo(); fresh = true; }
-normalize(S);
+const wasV = S.v; normalize(S);
+if (!fresh && wasV !== S.v) try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {}
 
 let sel = {people: new Set(), link: null, unit: null};
 const undoStack = [], redoStack = [];
@@ -248,11 +259,20 @@ function undo() { if (undoStack.length) { redoStack.push(lastSnap); restore(undo
 function redo() { if (redoStack.length) { undoStack.push(lastSnap); restore(redoStack.pop()); } }
 
 const byId = id => S.people.find(p => p.id === id);
+const unitById = id => S.units.find(u => u.id === id);
+const unitOf = id => S.units.find(u => u.members.includes(id));
+const nameOf = id => byId(id)?.name ?? unitById(id)?.name ?? '?';
+const capacity = (u, kind) => u.members.map(byId).filter(p => p && (p.kind || 'md') === kind).reduce((s, p) => s + (+p.tasks || 0), 0);
 const childrenOf = id => S.links.filter(l => l.from === id).map(l => l.to);
 
 function hiddenSet() {
   const hidden = new Set();
-  const walk = id => childrenOf(id).forEach(c => { if (!hidden.has(c)) { hidden.add(c); walk(c); } });
+  const walk = id => childrenOf(id).forEach(c => {
+    if (hidden.has(c)) return;
+    hidden.add(c);
+    unitById(c)?.members.forEach(m => { hidden.add(m); walk(m); });
+    walk(c);
+  });
   S.people.filter(p => p.collapsed).forEach(p => walk(p.id));
   return hidden;
 }
@@ -276,7 +296,7 @@ function renderCards() {
       <div class="role" title="${esc(p.title)}">${esc(p.title)}</div>
       ${p.note ? `<div class="note" title="${esc(p.note)}">ⓘ</div>` : ''}
       ${kids ? `<button class="kids" data-act="toggle">${kids} ${chevron(!p.collapsed)}</button>` : ''}
-      <div class="tasks${t ? '' : ' none'}"><button data-act="dec">−</button>&nbsp;<b>${t}</b>&nbsp;<span class="tw">${taskWord(t)}</span>&nbsp;<button data-act="inc">+</button></div>
+      <div class="tasks${t ? '' : ' none'}"${p.kind === 'org' ? ' hidden' : ''}><button data-act="dec">−</button>&nbsp;<b>${t}</b>&nbsp;<span class="tw">${taskWord(t)}</span>&nbsp;<button data-act="inc">+</button></div>
       <div class="handle" title="Потягни до іншої картки, щоб з'єднати"></div>
     </div>`;
   }).join('');
@@ -288,19 +308,26 @@ function taskWord(n) {
   return 'тасок';
 }
 
+// geometry of a link endpoint: a person card or a whole unit frame
+function endpoint(id, hidden) {
+  const p = byId(id);
+  if (p) return {cx: p.x + W / 2, top: p.y - AV, bottom: p.y + H, l: p.x, r: p.x + W, cy: p.y + H / 2};
+  const u = unitById(id), bx = u && unitBox(u, hidden);
+  return bx && {cx: (bx.x + bx.r) / 2, top: bx.y, bottom: bx.b, l: bx.x, r: bx.r, cy: (bx.y + bx.b) / 2};
+}
 function edgePath(a, b) {
-  const x1 = a.x + W / 2, y1 = a.y + H, x2 = b.x + W / 2, y2 = b.y - AV;
-  if (y2 > y1 + 10) { const my = y1 + Math.min(40, (y2 - y1) / 2); return `M${x1},${y1} V${my} H${x2} V${y2}`; }
+  if (b.top > a.bottom + 10) { const my = a.bottom + Math.min(40, (b.top - a.bottom) / 2); return `M${a.cx},${a.bottom} V${my} H${b.cx} V${b.top}`; }
   // target is not below: curve from side to side
-  const sx = a.x + (b.x > a.x ? W : 0), sy = a.y + H / 2, ex = b.x + (b.x > a.x ? 0 : W), ey = b.y + H / 2, dx = (ex - sx) / 2;
-  return `M${sx},${sy} C${sx + dx},${sy} ${ex - dx},${ey} ${ex},${ey}`;
+  const right = b.cx > a.cx, sx = right ? a.r : a.l, ex = right ? b.l : b.r, dx = (ex - sx) / 2;
+  return `M${sx},${a.cy} C${sx + dx},${a.cy} ${ex - dx},${b.cy} ${ex},${b.cy}`;
 }
 function renderEdges(temp) {
   const hidden = hiddenSet();
   let html = '';
   S.links.forEach((l, i) => {
     if (hidden.has(l.from) || hidden.has(l.to)) return;
-    const a = byId(l.from), b = byId(l.to), d = edgePath(a, b);
+    const a = endpoint(l.from, hidden), b = endpoint(l.to, hidden); if (!a || !b) return;
+    const d = edgePath(a, b);
     html += `<path class="edge${sel.link === i ? ' sel' : ''}" d="${d}"/><path class="hit" data-link="${i}" d="${d}"/>`;
   });
   if (temp) html += `<path class="temp" d="${temp}"/>`;
@@ -321,8 +348,9 @@ function renderUnits() {
   const hidden = hiddenSet();
   unitsEl.innerHTML = S.units.map(u => {
     const bx = unitBox(u, hidden); if (!bx) return '';
-    return `<div class="unit${sel.unit === u.id ? ' sel' : ''}" style="left:${bx.x}px;top:${bx.y}px;width:${bx.r - bx.x}px;height:${bx.b - bx.y}px;border-color:${u.color};background:${u.color}10">
-      <div class="unit-label" data-unit="${u.id}" style="background:${u.color}">${esc(u.name)}</div></div>`;
+    const md = capacity(u, 'md'), mkt = capacity(u, 'mkt'), diff = md - mkt;
+    return `<div class="unit${sel.unit === u.id ? ' sel' : ''}" data-uid="${u.id}" style="left:${bx.x}px;top:${bx.y}px;width:${bx.r - bx.x}px;height:${bx.b - bx.y}px;border-color:${u.color};background:${u.color}10">
+      <div class="unit-label" data-unit="${u.id}" style="background:${u.color}" title="Моушн дизайнери можуть зробити ${md}, маркетологи — ${mkt}. Різниця ${diff >= 0 ? '+' : ''}${diff}">${esc(u.name)}<span class="st"><i class="md">MD ${md}</i><i class="mkt">MKT ${mkt}</i><i class="${diff >= 0 ? 'pos' : 'neg'}">${diff > 0 ? '+' : diff < 0 ? '−' : ''}${Math.abs(diff)}</i></span></div></div>`;
   }).join('');
 }
 
@@ -352,21 +380,40 @@ function fit() {
 
 // ---------- auto layout (tidy tree) ----------
 function autoLayout() {
-  const GAPX = 200, GAPY = 200, incoming = new Set(S.links.map(l => l.to)), seen = new Set();
-  let roots = S.people.filter(p => !incoming.has(p.id));
-  if (!roots.length && S.people.length) roots = [S.people[0]];
+  // nodes = people outside units + whole units (members keep their arrangement)
+  const GAP = 40, VGAP = 90, UP = 26, UPAD = 18, snap = v => Math.round(v / 10) * 10;
+  const nodes = new Map();
+  S.people.forEach(p => { if (!unitOf(p.id)) nodes.set(p.id, {p, vw: W, vh: H + AV}); });
+  S.units.forEach(u => {
+    const ms = u.members.map(byId).filter(Boolean); if (!ms.length) return;
+    const x0 = Math.min(...ms.map(p => p.x)), y0 = Math.min(...ms.map(p => p.y));
+    nodes.set(u.id, {ms, x0, y0, vw: Math.max(...ms.map(p => p.x + W)) - x0 + 2 * UPAD, vh: Math.max(...ms.map(p => p.y + H)) - y0 + AV + UP + UPAD});
+  });
+  const nid = id => unitOf(id)?.id || id, kids = new Map([...nodes.keys()].map(k => [k, []])), inc = new Set();
+  S.links.forEach(l => {
+    const f = nid(l.from), t = nid(l.to);
+    if (f !== t && nodes.has(f) && nodes.has(t) && !kids.get(f).includes(t)) { kids.get(f).push(t); inc.add(t); }
+  });
+  let roots = [...nodes.keys()].filter(k => !inc.has(k));
+  if (!roots.length && nodes.size) roots = [nodes.keys().next().value];
+  const seen = new Set(), rowH = [];
   let cursor = 0;
-  const place = (p, depth) => {
-    seen.add(p.id);
-    const kids = childrenOf(p.id).map(byId).filter(k => !seen.has(k.id));
-    kids.forEach(k => seen.add(k.id));
-    p.y = depth * GAPY;
-    if (!kids.length) { p.x = cursor; cursor += GAPX; return; }
-    kids.forEach(k => place(k, depth + 1));
-    p.x = (kids[0].x + kids[kids.length - 1].x) / 2;
+  const place = (id, d) => {
+    seen.add(id);
+    const n = nodes.get(id); n.d = d; rowH[d] = Math.max(rowH[d] || 0, n.vh);
+    const ks = kids.get(id).filter(k => !seen.has(k)); ks.forEach(k => seen.add(k));
+    if (!ks.length) n.cx = cursor + n.vw / 2;
+    else { ks.forEach(k => place(k, d + 1)); n.cx = (nodes.get(ks[0]).cx + nodes.get(ks[ks.length - 1]).cx) / 2; }
+    cursor = Math.max(cursor, n.cx + n.vw / 2 + GAP);
   };
-  roots.forEach(r => { if (!seen.has(r.id)) { place(r, 0); cursor += GAPX / 2; } });
-  S.people.filter(p => !seen.has(p.id)).forEach(p => place(p, 0)); // cycles leftovers
+  roots.forEach(r => { if (!seen.has(r)) place(r, 0); });
+  [...nodes.keys()].forEach(k => { if (!seen.has(k)) place(k, 0); });
+  const rowY = [0]; rowH.forEach((h, d) => rowY[d + 1] = rowY[d] + h + VGAP);
+  nodes.forEach(n => {
+    const left = n.cx - n.vw / 2, top = rowY[n.d];
+    if (n.p) { n.p.x = snap(left); n.p.y = snap(top + AV); }
+    else { const dx = snap(left + UPAD - n.x0), dy = snap(top + UP + AV - n.y0); n.ms.forEach(p => { p.x += dx; p.y += dy; }); }
+  });
   commit(); fit();
 }
 
@@ -437,16 +484,19 @@ window.addEventListener('pointerup', e => {
     if (d.moved) commit();
     else { sel = {people: new Set(), link: null, unit: d.u.id}; render(); openUnit(d.u.id); }
   } else if (d.mode === 'connect') {
-    const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('.card');
-    if (over && over.dataset.id !== d.from) {
-      const to = over.dataset.id;
-      if (S.links.some(l => (l.from === d.from && l.to === to) || (l.from === to && l.to === d.from))) toast('Такий звʼязок вже є');
-      else { S.links.push({from: d.from, to}); commit(); return; }
-    } else if (!over) {
+    const hitEl = document.elementFromPoint(e.clientX, e.clientY);
+    const over = hitEl?.closest('.card'), overUnit = hitEl?.closest('.unit');
+    const lift = id => unitOf(id)?.id || id;           // lines only between units
+    const target = over ? lift(over.dataset.id) : overUnit?.dataset.uid, from = lift(d.from);
+    if (target) {
+      if (target === from) toast('Всередині юніту лінії не потрібні');
+      else if (S.links.some(l => (l.from === from && l.to === target) || (l.from === target && l.to === from))) toast('Такий звʼязок вже є');
+      else { S.links.push({from, to: target}); commit(); return; }
+    } else {
       // dropped on empty space → create a new report there
       const w = toWorld(e.clientX, e.clientY);
       const p = {id: uid(), name: 'Нова людина', title: 'Посада', tasks: 0, x: Math.round((w.x - W / 2) / 10) * 10, y: Math.round((w.y + AV) / 10) * 10};
-      S.people.push(p); S.links.push({from: d.from, to: p.id});
+      S.people.push(p); S.links.push({from: lift(d.from), to: p.id});
       sel = {people: new Set([p.id]), link: null, unit: null}; commit(); openPerson(p.id, true); return;
     }
     render();
@@ -487,7 +537,7 @@ function addPerson() {
   const parent = sel.people.size === 1 ? byId([...sel.people][0]) : null;
   const p = {id: uid(), name: 'Нова людина', title: 'Посада', tasks: 0, x: Math.round((c.x - W / 2) / 10) * 10, y: Math.round(c.y / 10) * 10};
   if (parent) {
-    const sib = childrenOf(parent.id).map(byId);
+    const sib = childrenOf(parent.id).map(byId).filter(Boolean);
     p.y = parent.y + 200; p.x = sib.length ? Math.max(...sib.map(s => s.x)) + 200 : parent.x;
     S.links.push({from: parent.id, to: p.id}); parent.collapsed = false;
   }
@@ -510,7 +560,7 @@ function addUnit() {
 function deleteUnit(id) {
   const u = S.units.find(u => u.id === id);
   if (!confirm(`Видалити юніт «${u.name}»? Люди залишаться.`)) return;
-  S.units = S.units.filter(x => x.id !== id); sel.unit = null; closePanel(); commit();
+  S.units = S.units.filter(x => x.id !== id); normalize(S); sel.unit = null; closePanel(); commit();
 }
 
 // ---------- side panel ----------
@@ -520,8 +570,8 @@ function bindLive(input, fn) { input.addEventListener('input', () => { fn(input.
 function openPerson(id, focus) {
   const p = byId(id); if (!p) return;
   panel.dataset.person = id;
-  const parents = S.links.filter(l => l.to === id).map(l => byId(l.from));
-  const kids = childrenOf(id).map(byId);
+  const parents = S.links.filter(l => l.to === id).map(l => ({name: nameOf(l.from)}));
+  const kids = childrenOf(id).map(c => ({name: nameOf(c)}));
   panel.innerHTML = `
     <h2>Людина <button id="pClose">×</button></h2>
     <div class="field photo">
@@ -578,7 +628,8 @@ function openUnit(id, focus) {
     <div class="stat"><span>Людей</span><b>${u.members.length}</b></div>
     <div class="stat"><span>Тасок сумарно (можуть зробити)</span><b>${tasks}</b></div>
     <div class="stat"><span>…з них моушн дизайнери</span><b>${u.members.map(byId).filter(p => p && (p.kind || 'md') === 'md').reduce((s, p) => s + (+p.tasks || 0), 0)}</b></div>
-    <div class="stat" style="margin-bottom:12px"><span>…з них маркетологи</span><b>${u.members.map(byId).filter(p => p && p.kind === 'mkt').reduce((s, p) => s + (+p.tasks || 0), 0)}</b></div>
+    <div class="stat"><span>…з них маркетологи</span><b>${u.members.map(byId).filter(p => p && p.kind === 'mkt').reduce((s, p) => s + (+p.tasks || 0), 0)}</b></div>
+    <div class="stat" style="margin-bottom:12px"><span>Різниця MD − MKT</span><b style="color:${capacity(u,'md') - capacity(u,'mkt') >= 0 ? '#137a3a' : '#c62828'}">${capacity(u,'md') - capacity(u,'mkt')}</b></div>
     <div class="field"><label>Хто входить у юніт</label><div class="checks">${S.people.map(p => `<label><input type="checkbox" data-p="${p.id}" ${u.members.includes(p.id) ? 'checked' : ''}>${esc(p.name)} <span class="hint">${esc(p.title)}</span></label>`).join('')}</div></div>
     <div class="row" style="margin:16px 0"><button class="tb danger" id="uDel">Видалити юніт</button></div>
     <p class="hint">Тягни за назву юніту на полотні, щоб перемістити всю групу.</p>`;
