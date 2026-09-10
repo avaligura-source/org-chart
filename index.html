@@ -122,6 +122,11 @@
   .hint code{background:#f2f4f7;padding:1px 4px;border-radius:4px}
   .stat{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0f1f3;font-size:13px}
 
+  #shot{position:fixed;inset:0;z-index:50;background:rgba(20,22,26,.72);display:flex;flex-direction:column}
+  .shot-bar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#fff;border-bottom:1px solid var(--border)}
+  .shot-body{flex:1;overflow:auto;padding:20px;text-align:center}
+  .shot-body img{max-width:100%;height:auto;background:#fff;box-shadow:0 8px 30px rgba(0,0,0,.35);border-radius:6px;cursor:zoom-in}
+  .shot-body.full img{max-width:none;width:auto;cursor:zoom-out}
   .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#1f2328;color:#fff;padding:9px 14px;border-radius:8px;font-size:13px;z-index:40;opacity:0;transition:opacity .2s;pointer-events:none}
   .toast.show{opacity:1}
   @media (max-width:820px){ .toolbar .opt{display:none} #panel{width:100%} }
@@ -139,6 +144,7 @@
   <div class="spacer"></div>
   <div class="legend opt"><span><i style="background:var(--md)"></i>Моушн дизайнери</span><span><i style="background:var(--mkt)"></i>CMM</span></div>
   <span id="status" class="ok">Збережено</span>
+  <button class="tb" id="shotBtn" title="Зняти всю схему у високій якості">📷 Скріншот</button>
   <button class="tb opt" id="exportBtn">Експорт</button>
   <button class="tb opt" id="importBtn">Імпорт</button>
   <button class="tb" id="syncBtn" title="Синхронізація з GitHub">☁ GitHub</button>
@@ -162,6 +168,16 @@
 
 <aside id="panel"></aside>
 <div class="toast" id="toast"></div>
+<div id="shot" hidden>
+  <div class="shot-bar">
+    <b>Скріншот</b><span id="shotInfo" class="hint"></span>
+    <div class="spacer"></div>
+    <button class="tb" id="shotZoom">🔍 100%</button>
+    <button class="tb primary" id="shotSave">⬇ Зберегти PNG</button>
+    <button class="tb" id="shotClose">✕</button>
+  </div>
+  <div class="shot-body" id="shotBody"><img id="shotImg" alt="Скріншот оргструктури"></div>
+</div>
 
 <script>
 (() => {
@@ -569,6 +585,7 @@ document.addEventListener('keydown', e => {
   const typing = /INPUT|TEXTAREA/.test(document.activeElement?.tagName);
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !typing) { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
   if (typing) return;
+  if (e.key === 'Escape' && !$('#shot').hidden) { $('#shot').hidden = true; return; }
   if (e.key === 'Escape') { sel = {people: new Set(), link: null, unit: null}; closePanel(); render(); }
   if (e.key === 'Delete' || e.key === 'Backspace') {
     if (sel.link != null) { S.links.splice(sel.link, 1); sel.link = null; commit(); }
@@ -706,6 +723,50 @@ $('#photoFile').addEventListener('change', e => {
 });
 
 // ---------- export / import ----------
+// ---------- screenshot ----------
+let shotUrl = null;
+function loadScript(src) {
+  return new Promise((res, rej) => { const el = document.createElement('script'); el.src = src; el.onload = res; el.onerror = rej; document.head.appendChild(el); });
+}
+async function takeShot() {
+  const btn = $('#shotBtn'); btn.disabled = true; btn.textContent = '⏳ Знімаю…';
+  const prevSel = sel; sel = {people: new Set(), link: null, unit: null}; render();
+  try {
+    if (!window.htmlToImage) await loadScript('https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js');
+    // bounding box of everything drawn, in world coordinates
+    const wr = world.getBoundingClientRect(), k = S.view.k;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    world.querySelectorAll('.card, .unit, .unit-label, .gtot, .avatar').forEach(el => {
+      const r = el.getBoundingClientRect();
+      x0 = Math.min(x0, (r.left - wr.left) / k); y0 = Math.min(y0, (r.top - wr.top) / k);
+      x1 = Math.max(x1, (r.right - wr.left) / k); y1 = Math.max(y1, (r.bottom - wr.top) / k);
+    });
+    if (!isFinite(x0)) throw new Error('empty');
+    const M = 40; x0 -= M; y0 -= M; x1 += M; y1 += M;
+    const w = Math.ceil(x1 - x0), h = Math.ceil(y1 - y0);
+    const ratio = Math.max(1, Math.min(3, 14000 / Math.max(w, h)));   // sharp but within canvas limits
+    shotUrl = await htmlToImage.toPng(world, {
+      width: w, height: h, pixelRatio: ratio, backgroundColor: '#f7f7f8',
+      style: {transform: `translate(${-x0}px,${-y0}px)`, transformOrigin: '0 0'},
+      filter: n => !(n.classList && (n.classList.contains('handle') || n.tagName === 'BUTTON' && n.closest?.('.tasks')))
+    });
+    $('#shotImg').src = shotUrl;
+    $('#shotInfo').textContent = `${Math.round(w * ratio)} × ${Math.round(h * ratio)} px`;
+    $('#shotBody').classList.remove('full'); $('#shotZoom').textContent = '🔍 100%';
+    $('#shot').hidden = false;
+  } catch (err) { console.error(err); toast('Не вдалося зробити скріншот'); }
+  sel = prevSel; render();
+  btn.disabled = false; btn.textContent = '📷 Скріншот';
+}
+function toggleShotZoom() { const f = $('#shotBody').classList.toggle('full'); $('#shotZoom').textContent = f ? '🔍 Вмістити' : '🔍 100%'; }
+$('#shotBtn').onclick = takeShot;
+$('#shotImg').onclick = toggleShotZoom; $('#shotZoom').onclick = toggleShotZoom;
+$('#shotClose').onclick = () => { $('#shot').hidden = true; };
+$('#shotSave').onclick = () => {
+  const a = document.createElement('a'), d = new Date();
+  a.href = shotUrl; a.download = `org-chart-${d.toISOString().slice(0, 10)}.png`; a.click();
+};
+
 $('#exportBtn').onclick = () => {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(S, null, 2)], {type: 'application/json'}));
