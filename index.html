@@ -1,0 +1,725 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Org Chart Builder</title>
+<style>
+  :root{
+    --bg:#f7f7f8; --card:#fff; --line:#cfd2d8; --text:#1f2328; --muted:#5b616b;
+    --blue:#1a4fd6; --accent:#2f6bff; --border:#dfe1e6; --shadow:0 1px 2px rgba(0,0,0,.05);
+    --W:170px; --H:108px; --md:#5b5bd6; --mkt:#ef8a17; --mkt-bg:#fff8ef;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font:14px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;color:var(--text);background:var(--bg);overflow:hidden}
+  button{font:inherit;cursor:pointer}
+
+  /* toolbar */
+  .toolbar{position:fixed;top:0;left:0;right:0;height:52px;display:flex;align-items:center;gap:8px;padding:0 14px;background:#fff;border-bottom:1px solid var(--border);z-index:20}
+  .toolbar h1{font-size:15px;margin:0 10px 0 0;font-weight:650}
+  .tb{border:1px solid var(--border);background:#fff;border-radius:8px;padding:6px 11px;color:var(--text);white-space:nowrap}
+  .tb:hover{background:#f2f4f7}
+  .tb.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .tb.primary:hover{background:#2358e0}
+  .sep{width:1px;height:24px;background:var(--border);margin:0 4px}
+  .spacer{flex:1}
+  #status{font-size:12px;color:var(--muted);white-space:nowrap}
+  #status.ok::before{content:"● ";color:#1a9b4b}
+  #status.busy::before{content:"● ";color:#e0a100}
+  #status.err::before{content:"● ";color:#d33}
+
+  /* canvas */
+  #viewport{position:fixed;top:52px;left:0;right:0;bottom:0;overflow:hidden;cursor:grab;touch-action:none;
+    background-image:radial-gradient(#dcdee3 1px,transparent 1px);background-size:22px 22px}
+  #viewport.panning{cursor:grabbing}
+  #world{position:absolute;left:0;top:0;transform-origin:0 0}
+  #units,#cards{position:absolute;left:0;top:0}
+  #edges{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible}
+  #edges path.edge{fill:none;stroke:#c3c6cc;stroke-width:1.3}
+  #edges path.hit{fill:none;stroke:transparent;stroke-width:12;cursor:pointer;pointer-events:stroke}
+  #edges path.edge.sel{stroke:var(--accent);stroke-width:2.2}
+  #edges path.temp{fill:none;stroke:var(--accent);stroke-width:2;stroke-dasharray:6 5}
+
+  /* card */
+  .card{position:absolute;width:var(--W);height:var(--H);background:var(--card);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);
+    padding:34px 8px 6px;text-align:center;user-select:none;cursor:pointer}
+  .card:hover{border-color:#b9bec8}
+  .card.k-md{border-top:4px solid var(--md)}
+  .card.k-mkt{border-top:4px solid var(--mkt);background:var(--mkt-bg)}
+  .card.k-org{background:#f4f6fb}
+  .legend{display:flex;gap:12px;font-size:12px;color:var(--muted);align-items:center}
+  .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-2px}
+  .kind-pick{display:flex;gap:6px}
+  .kind-pick button{flex:1;padding:7px;border:1px solid var(--border);background:#fff;border-radius:8px;font-size:13px}
+  .kind-pick button.on{border-color:var(--accent);background:#eef3ff;color:var(--accent);font-weight:600}
+  .card.sel{border-color:var(--accent);box-shadow:0 0 0 2px rgba(47,107,255,.25)}
+  .card.drop{border-color:#1a9b4b;box-shadow:0 0 0 3px rgba(26,155,75,.3)}
+  .avatar{position:absolute;left:50%;top:-30px;transform:translateX(-50%);width:58px;height:58px;border-radius:8px;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:650;font-size:19px;background:#8a8f98}
+  .avatar img{width:100%;height:100%;object-fit:cover;pointer-events:none}
+  .name{color:var(--blue);font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+  .role{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+  .kids{position:absolute;right:6px;bottom:4px;border:0;background:none;color:var(--text);font-size:13px;padding:2px 4px;border-radius:4px}
+  .kids:hover{background:#eef0f3}
+  .kids svg{vertical-align:-2px}
+  .handle{position:absolute;left:50%;bottom:-7px;width:14px;height:14px;margin-left:-7px;border-radius:50%;background:#fff;border:2px solid var(--accent);
+    opacity:0;cursor:crosshair;transition:opacity .12s}
+  .card:hover .handle,.card.sel .handle{opacity:1}
+  .tasks{position:absolute;left:6px;bottom:5px;display:flex;align-items:center;gap:2px;
+    background:#f2f4f7;border-radius:999px;padding:2px 8px;font-size:12px;white-space:nowrap;color:var(--muted)}
+  .tasks b{color:var(--text);font-weight:650}
+  .note{position:absolute;top:5px;right:8px;color:var(--muted);font-size:14px;cursor:help}
+  .field textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font:inherit;resize:vertical;min-height:60px}
+  .tasks.none{opacity:0}
+  .card:hover .tasks.none,.card.sel .tasks.none{opacity:1}
+  .tasks button{display:none;border:0;background:#fff;border-radius:50%;width:18px;height:18px;line-height:18px;padding:0;font-size:13px;color:var(--text)}
+  .card:hover .tasks button,.card.sel .tasks button{display:inline-block}
+  .tasks button:hover{background:#dfe3ea}
+  .tasks.none b,.tasks.none .tw{display:none}
+
+  /* units */
+  .unit{position:absolute;border:1.5px dashed;border-radius:14px}
+  .unit-label{position:absolute;left:12px;top:-14px;padding:4px 10px;border-radius:999px;color:#fff;font-size:12px;font-weight:600;white-space:nowrap;cursor:move;user-select:none;box-shadow:var(--shadow)}
+  .unit-label span{opacity:.85;font-weight:500}
+  .unit.sel{border-style:solid;border-width:2px}
+
+  /* zoom */
+  .zoom{position:fixed;right:18px;top:70px;display:flex;flex-direction:column;gap:8px;z-index:15}
+  .zoom button{width:44px;height:36px;border-radius:18px;border:1px solid #c9ccd2;background:#fff;display:flex;align-items:center;justify-content:center}
+  .zoom button:hover{background:#f2f4f7}
+
+  /* panel */
+  #panel{position:fixed;top:52px;right:0;bottom:0;width:320px;background:#fff;border-left:1px solid var(--border);z-index:18;padding:18px;overflow:auto;
+    transform:translateX(100%);transition:transform .18s}
+  #panel.open{transform:none}
+  #panel h2{font-size:15px;margin:0 0 14px;display:flex;justify-content:space-between;align-items:center}
+  #panel h2 button{border:0;background:none;font-size:20px;color:var(--muted)}
+  .field{margin-bottom:12px}
+  .field label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+  .field input[type=text],.field input[type=number],.field input[type=password]{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font:inherit}
+  .field input:focus{outline:2px solid rgba(47,107,255,.3);border-color:var(--accent)}
+  .row{display:flex;gap:8px;align-items:center}
+  .stepper{display:flex;align-items:center;gap:6px}
+  .stepper button{width:32px;height:34px;border:1px solid var(--border);background:#fff;border-radius:8px;font-size:16px}
+  .stepper input{text-align:center}
+  .photo{display:flex;gap:10px;align-items:center}
+  .photo .avatar{position:static;transform:none}
+  .checks{max-height:200px;overflow:auto;border:1px solid var(--border);border-radius:8px;padding:6px}
+  .checks label{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--text);padding:4px 2px;margin:0}
+  .swatches{display:flex;gap:6px;flex-wrap:wrap}
+  .swatches button{width:24px;height:24px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--border)}
+  .swatches button.on{box-shadow:0 0 0 2px var(--text)}
+  .danger{color:#c62828;border-color:#f1c4c4}
+  .danger:hover{background:#fdecec}
+  .hint{font-size:12px;color:var(--muted);line-height:1.45}
+  .hint code{background:#f2f4f7;padding:1px 4px;border-radius:4px}
+  .stat{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0f1f3;font-size:13px}
+
+  .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#1f2328;color:#fff;padding:9px 14px;border-radius:8px;font-size:13px;z-index:40;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.show{opacity:1}
+  @media (max-width:820px){ .toolbar .opt{display:none} #panel{width:100%} }
+</style>
+</head>
+<body>
+<header class="toolbar">
+  <h1>Org Chart</h1>
+  <button class="tb primary" id="addPerson">+ Людина</button>
+  <button class="tb" id="addUnit" title="Виділи кілька карток (Shift+клік), потім натисни">+ Юніт</button>
+  <div class="sep"></div>
+  <button class="tb" id="layoutBtn" title="Автоматично розставити деревом">Авто-розкладка</button>
+  <button class="tb opt" id="undoBtn" title="Ctrl/Cmd+Z">↶</button>
+  <button class="tb opt" id="redoBtn" title="Ctrl/Cmd+Shift+Z">↷</button>
+  <div class="spacer"></div>
+  <div class="legend opt"><span><i style="background:var(--md)"></i>Моушн дизайнери</span><span><i style="background:var(--mkt)"></i>Маркетологи</span></div>
+  <span id="status" class="ok">Збережено</span>
+  <button class="tb opt" id="exportBtn">Експорт</button>
+  <button class="tb opt" id="importBtn">Імпорт</button>
+  <button class="tb" id="syncBtn" title="Синхронізація з GitHub">☁ GitHub</button>
+  <input type="file" id="importFile" accept="application/json" hidden>
+  <input type="file" id="photoFile" accept="image/*" hidden>
+</header>
+
+<div id="viewport">
+  <div id="world">
+    <div id="units"></div>
+    <svg id="edges"></svg>
+    <div id="cards"></div>
+  </div>
+</div>
+
+<div class="zoom">
+  <button id="zin" title="Наблизити"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v6M8 11h6"/></svg></button>
+  <button id="zout" title="Віддалити"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 11h6"/></svg></button>
+  <button id="zfit" title="Показати все"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+</div>
+
+<aside id="panel"></aside>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+const W = 170, H = 108, AV = 30;            // card size, avatar overhang
+const KEY = 'orgchart.motion.v2', GH_KEY = 'orgchart.github';
+const COLORS = ['#2f6bff','#7c4dff','#e0457b','#f08c00','#1a9b4b','#0f9bb5','#8a6d3b','#5b616b'];
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+const viewport = $('#viewport'), world = $('#world'), cardsEl = $('#cards'), edgesEl = $('#edges'), unitsEl = $('#units'), panel = $('#panel');
+
+// ---------- state ----------
+function demo() {
+  // Motion Team — new structure. kind: 'md' motion designer, 'mkt' marketer, 'org' group card
+  const MD = 'Motion Designer', MKT = 'Marketer', HELP = n => `На період пошуку MD буде допомога частково з ${n}`;
+  const teams = [
+    ['Indoor Walking', '#1a9b4b', [['Nataliia Mak', 'Co-lead'], ['Dmytro Sha', MD], ['Taras Kol', MD]], [['Anna Ant', 50]]],
+    ['Military', '#2f6bff', [['Anastasiia Zad', 'Co-lead'], ['Mariana Tro', MD], ['Taras Bud', MD], ['Yelyzaveta Hul', 'Freelance']], [['Anastasiia Bur', 100], ['Dmytro Dud', 100]]],
+    ['ChairYoga', '#7c4dff', [['Yuliia Tol', 'Co-lead'], ['Alla Hor', MD], ['Maryna Zhy', MD], ['Yuliia Ste', MD]],
+      [['Yuliia Pid', 50], ['Tetiana Shk', 100], ['Anna Ost', 100], ['Polina Hlu', 100], ['Albert Mkr', 100], ['Ihor M', 100]]],
+    ['TikTok + Snapchat', '#e0457b', [['1-2 нових MD', 'Вакансія', HELP('Indoor Walking / Military')]], [['Olha Laz', 100], ['Olha Vol', 100]]],
+    ['Google', '#f08c00', [['Daniil Mor', MD], ['1 новий MD', 'Вакансія']], [['Alisa Per', 100], ['Viktoriia Ch', 100]]],
+    ['Локалізації', '#0f9bb5', [['Kateryna She', MD], ['3-4 нових MD', 'Вакансія', HELP('Indoor Walking / Military / Chair Yoga')]],
+      [['Oksana Pry', 50], ['Daryna Kyr', 100], ['Karina Dar', 100], ['Lina Ovc', 100], ['Oleksii Dmy', 100]]],
+    ['Applovin', '#d9480f', [['Olena Str', MD], ['Vadym Bla', MD], ['Vitalii Dem', 'Freelance']], [['Viktoriia Zle', 80], ['Alina Fer', 160]]],
+  ];
+  const COL = 200, TEAM = 2 * COL + 50, ROW = 150, TOP = 230;
+  const people = [], links = [], units = [];
+  const add = (name, title, kind, x, y, extra) => { const p = {id: uid(), name, title, kind, tasks: 0, x, y, ...extra}; people.push(p); return p; };
+  const md = ([n, t, note], x, y) => add(n, t, 'md', x, y, note ? {note} : {});
+  const mkt = ([n, cap], x, y) => add(n, MKT, 'mkt', x, y, {tasks: cap});
+  const cx = Math.round(((teams.length * TEAM - 50) / 2 - W / 2) / 10) * 10;
+  const root = add('Motion Team', 'New Structure', 'org', cx, 0);
+  teams.forEach(([team, color, mds, mkts], i) => {
+    const x0 = i * TEAM;
+    const a = mds.map((m, j) => md(m, x0, TOP + j * ROW)), b = mkts.map((m, j) => mkt(m, x0 + COL, TOP + j * ROW));
+    links.push({from: root.id, to: a[0].id});
+    a.slice(1).forEach(p => links.push({from: a[0].id, to: p.id}));
+    if (b.length) { links.push({from: a[0].id, to: b[0].id}); b.slice(1).forEach(p => links.push({from: b[0].id, to: p.id})); }
+    units.push({id: uid(), name: team, color, members: [...a, ...b].map(p => p.id)});
+  });
+  const hub = add('R&D Teams', 'Дослідження', 'org', cx, 1100);
+  [['R&D 1', '#2f6bff', [['Oleksandr For', MD], ['Yana Pat', MD]], [['Natalia Voy', 100], ['Oleksii Nad', 100], ['Pavlo Ber', 100]], cx - 720],
+   ['R&D 2', '#7c4dff', [['Anton Val', MD, 'Підключення до інших кутів після донайму'], ['1-2 нових MD', 'Вакансія']], [['Veronika Laz', 100], ['Viacheslav Rod', 100]], cx + 320]
+  ].forEach(([team, color, mds, mkts, x0]) => {
+    const a = mds.map((m, j) => md(m, x0 + j * COL, 1320)), b = mkts.map((m, j) => mkt(m, x0 + j * COL, 1320 + ROW));
+    a.forEach(p => links.push({from: hub.id, to: p.id}));
+    b.forEach(p => links.push({from: a[0].id, to: p.id}));
+    units.push({id: uid(), name: team, color, members: [...a, ...b].map(p => p.id)});
+  });
+  return {people, links, units, view: {x: 0, y: 0, k: 1}, updatedAt: 0};
+}
+function normalize(s) {
+  s.people ||= []; s.links ||= []; s.units ||= []; s.view ||= {x: 0, y: 0, k: 1};
+  const ids = new Set(s.people.map(p => p.id));
+  s.links = s.links.filter(l => ids.has(l.from) && ids.has(l.to));
+  s.units.forEach(u => u.members = (u.members || []).filter(id => ids.has(id)));
+  return s;
+}
+let S, fresh = false;
+try { S = JSON.parse(localStorage.getItem(KEY)); } catch {}
+if (!S || !S.people) { S = demo(); fresh = true; }
+normalize(S);
+
+let sel = {people: new Set(), link: null, unit: null};
+const undoStack = [], redoStack = [];
+let lastSnap = JSON.stringify(S);
+
+function persist(remote = true) {
+  S.updatedAt = Date.now();
+  const snap = JSON.stringify(S);
+  try { localStorage.setItem(KEY, snap); setStatus('ok', 'Збережено'); }
+  catch { setStatus('err', 'Не вдалося зберегти (завеликі фото?)'); }
+  if (remote) GH.schedule();
+}
+// call after every user change
+function commit() {
+  undoStack.push(lastSnap); if (undoStack.length > 80) undoStack.shift();
+  redoStack.length = 0;
+  persist();
+  lastSnap = JSON.stringify(S);
+  render();
+}
+function restore(snap) {
+  const view = S.view; S = normalize(JSON.parse(snap)); S.view = view;
+  lastSnap = JSON.stringify(S); sel = {people: new Set(), link: null, unit: null};
+  persist(); render(); closePanel();
+}
+function undo() { if (undoStack.length) { redoStack.push(lastSnap); restore(undoStack.pop()); } }
+function redo() { if (redoStack.length) { undoStack.push(lastSnap); restore(redoStack.pop()); } }
+
+const byId = id => S.people.find(p => p.id === id);
+const childrenOf = id => S.links.filter(l => l.from === id).map(l => l.to);
+
+function hiddenSet() {
+  const hidden = new Set();
+  const walk = id => childrenOf(id).forEach(c => { if (!hidden.has(c)) { hidden.add(c); walk(c); } });
+  S.people.filter(p => p.collapsed).forEach(p => walk(p.id));
+  return hidden;
+}
+
+// ---------- rendering ----------
+const initials = n => (n || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+const colorFor = s => COLORS[[...(s || '')].reduce((a, c) => a + c.charCodeAt(0), 0) % COLORS.length];
+const avatarColor = p => ({md: 'var(--md)', mkt: 'var(--mkt)', org: '#1f3a6e'})[p.kind || 'md'];
+const avatarHTML = p => p.photo ? `<img src="${p.photo}" alt="">` : esc(initials(p.name));
+const chevron = up => `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="${up ? 'M6 15l6-6 6 6' : 'M6 9l6 6 6-6'}"/></svg>`;
+
+function render() { applyView(); renderCards(); renderEdges(); renderUnits(); }
+
+function renderCards() {
+  const hidden = hiddenSet();
+  cardsEl.innerHTML = S.people.filter(p => !hidden.has(p.id)).map(p => {
+    const kids = childrenOf(p.id).length, t = +p.tasks || 0;
+    return `<div class="card k-${p.kind || 'md'}${sel.people.has(p.id) ? ' sel' : ''}" data-id="${p.id}" style="left:${p.x}px;top:${p.y}px">
+      <div class="avatar" style="${p.photo ? '' : 'background:' + avatarColor(p)}">${avatarHTML(p)}</div>
+      <div class="name" title="${esc(p.name)}">${esc(p.name) || '<span style="color:#aaa">Без імені</span>'}</div>
+      <div class="role" title="${esc(p.title)}">${esc(p.title)}</div>
+      ${p.note ? `<div class="note" title="${esc(p.note)}">ⓘ</div>` : ''}
+      ${kids ? `<button class="kids" data-act="toggle">${kids} ${chevron(!p.collapsed)}</button>` : ''}
+      <div class="tasks${t ? '' : ' none'}"><button data-act="dec">−</button>&nbsp;<b>${t}</b>&nbsp;<span class="tw">${taskWord(t)}</span>&nbsp;<button data-act="inc">+</button></div>
+      <div class="handle" title="Потягни до іншої картки, щоб з'єднати"></div>
+    </div>`;
+  }).join('');
+}
+function taskWord(n) {
+  const a = n % 10, b = n % 100;
+  if (a === 1 && b !== 11) return 'таска';
+  if (a >= 2 && a <= 4 && (b < 12 || b > 14)) return 'таски';
+  return 'тасок';
+}
+
+function edgePath(a, b) {
+  const x1 = a.x + W / 2, y1 = a.y + H, x2 = b.x + W / 2, y2 = b.y - AV;
+  if (y2 > y1 + 10) { const my = y1 + Math.min(40, (y2 - y1) / 2); return `M${x1},${y1} V${my} H${x2} V${y2}`; }
+  // target is not below: curve from side to side
+  const sx = a.x + (b.x > a.x ? W : 0), sy = a.y + H / 2, ex = b.x + (b.x > a.x ? 0 : W), ey = b.y + H / 2, dx = (ex - sx) / 2;
+  return `M${sx},${sy} C${sx + dx},${sy} ${ex - dx},${ey} ${ex},${ey}`;
+}
+function renderEdges(temp) {
+  const hidden = hiddenSet();
+  let html = '';
+  S.links.forEach((l, i) => {
+    if (hidden.has(l.from) || hidden.has(l.to)) return;
+    const a = byId(l.from), b = byId(l.to), d = edgePath(a, b);
+    html += `<path class="edge${sel.link === i ? ' sel' : ''}" d="${d}"/><path class="hit" data-link="${i}" d="${d}"/>`;
+  });
+  if (temp) html += `<path class="temp" d="${temp}"/>`;
+  edgesEl.innerHTML = html;
+}
+function unitBox(u, hidden) {
+  const ms = u.members.map(byId).filter(p => p && !hidden.has(p.id));
+  if (!ms.length) return null;
+  const pad = 18;
+  return {
+    x: Math.min(...ms.map(p => p.x)) - pad,
+    y: Math.min(...ms.map(p => p.y)) - AV - pad - 8,
+    r: Math.max(...ms.map(p => p.x + W)) + pad,
+    b: Math.max(...ms.map(p => p.y + H)) + pad, ms
+  };
+}
+function renderUnits() {
+  const hidden = hiddenSet();
+  unitsEl.innerHTML = S.units.map(u => {
+    const bx = unitBox(u, hidden); if (!bx) return '';
+    return `<div class="unit${sel.unit === u.id ? ' sel' : ''}" style="left:${bx.x}px;top:${bx.y}px;width:${bx.r - bx.x}px;height:${bx.b - bx.y}px;border-color:${u.color};background:${u.color}10">
+      <div class="unit-label" data-unit="${u.id}" style="background:${u.color}">${esc(u.name)}</div></div>`;
+  }).join('');
+}
+
+// ---------- view ----------
+function applyView() { world.style.transform = `translate(${S.view.x}px,${S.view.y}px) scale(${S.view.k})`; }
+function toWorld(cx, cy) { const r = viewport.getBoundingClientRect(); return {x: (cx - r.left - S.view.x) / S.view.k, y: (cy - r.top - S.view.y) / S.view.k}; }
+let viewSaveT;
+function viewChanged() { applyView(); clearTimeout(viewSaveT); viewSaveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} }, 300); }
+function zoomAt(factor, cx, cy) {
+  const r = viewport.getBoundingClientRect();
+  if (cx == null) { cx = r.left + r.width / 2; cy = r.top + r.height / 2; }
+  const k = Math.min(2.5, Math.max(0.2, S.view.k * factor)), px = cx - r.left, py = cy - r.top;
+  S.view.x = px - (px - S.view.x) * (k / S.view.k); S.view.y = py - (py - S.view.y) * (k / S.view.k); S.view.k = k;
+  viewChanged();
+}
+function fit() {
+  const hidden = hiddenSet(), ps = S.people.filter(p => !hidden.has(p.id));
+  if (!ps.length) { S.view = {x: 80, y: 80, k: 1}; return viewChanged(); }
+  const x0 = Math.min(...ps.map(p => p.x)) - 60, y0 = Math.min(...ps.map(p => p.y)) - 90,
+        x1 = Math.max(...ps.map(p => p.x + W)) + 140, y1 = Math.max(...ps.map(p => p.y + H)) + 60;
+  const r = viewport.getBoundingClientRect(), pw = r.width - (panel.classList.contains('open') ? 320 : 0);
+  if (r.width < 200 || r.height < 150) return setTimeout(fit, 150); // page not laid out yet
+  const k = Math.min(1.2, Math.max(0.2, Math.min(pw / (x1 - x0), r.height / (y1 - y0))));
+  S.view = {k, x: (pw - (x1 - x0) * k) / 2 - x0 * k, y: (r.height - (y1 - y0) * k) / 2 - y0 * k};
+  viewChanged();
+}
+
+// ---------- auto layout (tidy tree) ----------
+function autoLayout() {
+  const GAPX = 200, GAPY = 200, incoming = new Set(S.links.map(l => l.to)), seen = new Set();
+  let roots = S.people.filter(p => !incoming.has(p.id));
+  if (!roots.length && S.people.length) roots = [S.people[0]];
+  let cursor = 0;
+  const place = (p, depth) => {
+    seen.add(p.id);
+    const kids = childrenOf(p.id).map(byId).filter(k => !seen.has(k.id));
+    kids.forEach(k => seen.add(k.id));
+    p.y = depth * GAPY;
+    if (!kids.length) { p.x = cursor; cursor += GAPX; return; }
+    kids.forEach(k => place(k, depth + 1));
+    p.x = (kids[0].x + kids[kids.length - 1].x) / 2;
+  };
+  roots.forEach(r => { if (!seen.has(r.id)) { place(r, 0); cursor += GAPX / 2; } });
+  S.people.filter(p => !seen.has(p.id)).forEach(p => place(p, 0)); // cycles leftovers
+  commit(); fit();
+}
+
+// ---------- interactions ----------
+let drag = null;
+viewport.addEventListener('pointerdown', e => {
+  if (e.button !== 0 || e.target.closest('button')) return;
+  const w = toWorld(e.clientX, e.clientY);
+  const handle = e.target.closest('.handle'), card = e.target.closest('.card'),
+        ulabel = e.target.closest('.unit-label'), hit = e.target.closest('[data-link]');
+  if (handle) {
+    drag = {mode: 'connect', from: card.dataset.id};
+  } else if (card) {
+    const id = card.dataset.id;
+    const ids = sel.people.has(id) && !e.shiftKey ? [...sel.people] : [id];
+    drag = {mode: 'card', id, ids, start: w, orig: ids.map(i => ({p: byId(i), x: byId(i).x, y: byId(i).y})), moved: false, shift: e.shiftKey};
+  } else if (ulabel) {
+    const u = S.units.find(u => u.id === ulabel.dataset.unit);
+    drag = {mode: 'unit', u, start: w, orig: u.members.map(i => ({p: byId(i), x: byId(i).x, y: byId(i).y})), moved: false};
+  } else if (hit) {
+    sel = {people: new Set(), link: +hit.dataset.link, unit: null}; closePanel(); render();
+    toast('Звʼязок виділено — натисни Delete, щоб видалити');
+    return;
+  } else {
+    drag = {mode: 'pan', sx: e.clientX, sy: e.clientY, vx: S.view.x, vy: S.view.y, moved: false};
+    viewport.classList.add('panning');
+  }
+  e.preventDefault();
+});
+window.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const w = toWorld(e.clientX, e.clientY);
+  if (drag.mode === 'pan') {
+    if (Math.abs(e.clientX - drag.sx) + Math.abs(e.clientY - drag.sy) > 3) drag.moved = true;
+    S.view.x = drag.vx + e.clientX - drag.sx; S.view.y = drag.vy + e.clientY - drag.sy; applyView();
+  } else if (drag.mode === 'card' || drag.mode === 'unit') {
+    const dx = w.x - drag.start.x, dy = w.y - drag.start.y;
+    if (!drag.moved && Math.hypot(dx, dy) * S.view.k < 4) return;
+    drag.moved = true;
+    drag.orig.forEach(o => {
+      o.p.x = Math.round((o.x + dx) / 10) * 10; o.p.y = Math.round((o.y + dy) / 10) * 10;
+      const el = cardsEl.querySelector(`[data-id="${o.p.id}"]`); if (el) { el.style.left = o.p.x + 'px'; el.style.top = o.p.y + 'px'; }
+    });
+    renderEdges(); renderUnits();
+  } else if (drag.mode === 'connect') {
+    const a = byId(drag.from);
+    const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('.card');
+    cardsEl.querySelectorAll('.drop').forEach(c => c.classList.remove('drop'));
+    if (over && over.dataset.id !== drag.from) over.classList.add('drop');
+    renderEdges(`M${a.x + W / 2},${a.y + H} L${w.x},${w.y}`);
+  }
+});
+window.addEventListener('pointerup', e => {
+  if (!drag) return;
+  const d = drag; drag = null; viewport.classList.remove('panning');
+  if (d.mode === 'pan') {
+    if (d.moved) viewChanged();
+    else { sel = {people: new Set(), link: null, unit: null}; closePanel(); render(); }
+  } else if (d.mode === 'card') {
+    if (d.moved) commit();
+    else {
+      if (d.shift) { sel.people.has(d.id) ? sel.people.delete(d.id) : sel.people.add(d.id); sel.link = null; sel.unit = null; }
+      else sel = {people: new Set([d.id]), link: null, unit: null};
+      render();
+      sel.people.size === 1 ? openPerson([...sel.people][0]) : openMulti();
+    }
+  } else if (d.mode === 'unit') {
+    if (d.moved) commit();
+    else { sel = {people: new Set(), link: null, unit: d.u.id}; render(); openUnit(d.u.id); }
+  } else if (d.mode === 'connect') {
+    const over = document.elementFromPoint(e.clientX, e.clientY)?.closest('.card');
+    if (over && over.dataset.id !== d.from) {
+      const to = over.dataset.id;
+      if (S.links.some(l => (l.from === d.from && l.to === to) || (l.from === to && l.to === d.from))) toast('Такий звʼязок вже є');
+      else { S.links.push({from: d.from, to}); commit(); return; }
+    } else if (!over) {
+      // dropped on empty space → create a new report there
+      const w = toWorld(e.clientX, e.clientY);
+      const p = {id: uid(), name: 'Нова людина', title: 'Посада', tasks: 0, x: Math.round((w.x - W / 2) / 10) * 10, y: Math.round((w.y + AV) / 10) * 10};
+      S.people.push(p); S.links.push({from: d.from, to: p.id});
+      sel = {people: new Set([p.id]), link: null, unit: null}; commit(); openPerson(p.id, true); return;
+    }
+    render();
+  }
+});
+// buttons inside cards
+cardsEl.addEventListener('click', e => {
+  const b = e.target.closest('button[data-act]'); if (!b) return;
+  const p = byId(b.closest('.card').dataset.id);
+  if (b.dataset.act === 'toggle') p.collapsed = !p.collapsed;
+  if (b.dataset.act === 'inc') p.tasks = (+p.tasks || 0) + 1;
+  if (b.dataset.act === 'dec') p.tasks = Math.max(0, (+p.tasks || 0) - 1);
+  commit();
+  if (panel.dataset.person === p.id) openPerson(p.id);
+});
+viewport.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (e.ctrlKey || e.metaKey) zoomAt(Math.exp(-e.deltaY * 0.01), e.clientX, e.clientY);
+  else if (!e.shiftKey && Math.abs(e.deltaY) >= 50 && e.deltaX === 0 && Number.isInteger(e.deltaY)) zoomAt(e.deltaY > 0 ? 0.9 : 1.1, e.clientX, e.clientY); // mouse wheel
+  else { S.view.x -= e.deltaX; S.view.y -= e.deltaY; viewChanged(); }
+}, {passive: false});
+
+document.addEventListener('keydown', e => {
+  const typing = /INPUT|TEXTAREA/.test(document.activeElement?.tagName);
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !typing) { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
+  if (typing) return;
+  if (e.key === 'Escape') { sel = {people: new Set(), link: null, unit: null}; closePanel(); render(); }
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (sel.link != null) { S.links.splice(sel.link, 1); sel.link = null; commit(); }
+    else if (sel.people.size) deletePeople([...sel.people]);
+    else if (sel.unit) deleteUnit(sel.unit);
+  }
+});
+
+// ---------- actions ----------
+function addPerson() {
+  const r = viewport.getBoundingClientRect(), c = toWorld(r.left + r.width / 2, r.top + r.height / 2);
+  const parent = sel.people.size === 1 ? byId([...sel.people][0]) : null;
+  const p = {id: uid(), name: 'Нова людина', title: 'Посада', tasks: 0, x: Math.round((c.x - W / 2) / 10) * 10, y: Math.round(c.y / 10) * 10};
+  if (parent) {
+    const sib = childrenOf(parent.id).map(byId);
+    p.y = parent.y + 200; p.x = sib.length ? Math.max(...sib.map(s => s.x)) + 200 : parent.x;
+    S.links.push({from: parent.id, to: p.id}); parent.collapsed = false;
+  }
+  S.people.push(p);
+  sel = {people: new Set([p.id]), link: null, unit: null};
+  commit(); openPerson(p.id, true);
+}
+function deletePeople(ids) {
+  if (!confirm(ids.length > 1 ? `Видалити ${ids.length} людей?` : `Видалити «${byId(ids[0]).name}»?`)) return;
+  const set = new Set(ids);
+  S.people = S.people.filter(p => !set.has(p.id));
+  normalize(S); sel = {people: new Set(), link: null, unit: null}; closePanel(); commit();
+}
+function addUnit() {
+  const members = [...sel.people];
+  const u = {id: uid(), name: 'Новий юніт', color: COLORS[S.units.length % COLORS.length], members};
+  S.units.push(u); sel = {people: new Set(), link: null, unit: u.id}; commit(); openUnit(u.id, true);
+  if (!members.length) toast('Обери учасників юніту в панелі праворуч');
+}
+function deleteUnit(id) {
+  const u = S.units.find(u => u.id === id);
+  if (!confirm(`Видалити юніт «${u.name}»? Люди залишаться.`)) return;
+  S.units = S.units.filter(x => x.id !== id); sel.unit = null; closePanel(); commit();
+}
+
+// ---------- side panel ----------
+function closePanel() { panel.classList.remove('open'); panel.dataset.person = ''; }
+function bindLive(input, fn) { input.addEventListener('input', () => { fn(input.value); persist(); render(); }); input.addEventListener('change', () => commit()); }
+
+function openPerson(id, focus) {
+  const p = byId(id); if (!p) return;
+  panel.dataset.person = id;
+  const parents = S.links.filter(l => l.to === id).map(l => byId(l.from));
+  const kids = childrenOf(id).map(byId);
+  panel.innerHTML = `
+    <h2>Людина <button id="pClose">×</button></h2>
+    <div class="field photo">
+      <div class="avatar" style="${p.photo ? '' : 'background:' + avatarColor(p)}">${avatarHTML(p)}</div>
+      <div class="row" style="flex-wrap:wrap"><button class="tb" id="pPhoto">Завантажити фото</button>${p.photo ? '<button class="tb" id="pPhotoDel">Прибрати</button>' : ''}</div>
+    </div>
+    <div class="field"><label>Імʼя</label><input type="text" id="pName" value="${esc(p.name)}"></div>
+    <div class="field"><label>Посада</label><input type="text" id="pTitle" value="${esc(p.title)}"></div>
+    <div class="field"><label>Нотатка</label><textarea id="pNote" placeholder="Коментар, контекст…">${esc(p.note || '')}</textarea></div>
+    <div class="field"><label>Роль</label><div class="kind-pick">${[['md','Моушн дизайнер'],['mkt','Маркетолог'],['org','Група']].map(([k,l]) => `<button data-kind="${k}" class="${(p.kind || 'md') === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+    <div class="field"><label>Скільки тасок може зробити</label>
+      <div class="stepper"><button id="pDec">−</button><input type="number" min="0" id="pTasks" value="${+p.tasks || 0}" style="width:90px"><button id="pInc">+</button></div></div>
+    <div class="field"><label>Юніти</label><div class="checks">${S.units.length ? S.units.map(u => `<label><input type="checkbox" data-unit="${u.id}" ${u.members.includes(id) ? 'checked' : ''}><span style="width:10px;height:10px;border-radius:50%;background:${u.color}"></span>${esc(u.name)}</label>`).join('') : '<div class="hint">Юнітів ще немає</div>'}</div></div>
+    <div class="field"><label>Керівник(и)</label><div class="hint">${parents.length ? parents.map(x => esc(x.name)).join(', ') : '—'}</div></div>
+    <div class="field"><label>Підлеглі (${kids.length})</label><div class="hint">${kids.length ? kids.map(x => esc(x.name)).join(', ') : '—'}</div></div>
+    <div class="row" style="margin:16px 0"><button class="tb" id="pAddChild">+ Підлеглий</button><button class="tb danger" id="pDel">Видалити</button></div>
+    <p class="hint">Потягни синю точку під карткою на іншу картку — зʼявиться звʼязок. Відпусти на порожньому місці — створиться новий підлеглий.</p>`;
+  panel.classList.add('open');
+  $('#pClose').onclick = () => { closePanel(); };
+  bindLive($('#pName'), v => p.name = v);
+  bindLive($('#pTitle'), v => p.title = v);
+  panel.querySelectorAll('[data-kind]').forEach(b => b.onclick = () => { p.kind = b.dataset.kind; commit(); openPerson(id); });
+  bindLive($('#pNote'), v => { if (v.trim()) p.note = v; else delete p.note; });
+  bindLive($('#pTasks'), v => p.tasks = Math.max(0, parseInt(v) || 0));
+  $('#pDec').onclick = () => { p.tasks = Math.max(0, (+p.tasks || 0) - 1); $('#pTasks').value = p.tasks; commit(); };
+  $('#pInc').onclick = () => { p.tasks = (+p.tasks || 0) + 1; $('#pTasks').value = p.tasks; commit(); };
+  panel.querySelectorAll('[data-unit]').forEach(cb => cb.onchange = () => {
+    const u = S.units.find(u => u.id === cb.dataset.unit);
+    u.members = cb.checked ? [...new Set([...u.members, id])] : u.members.filter(m => m !== id); commit();
+  });
+  $('#pPhoto').onclick = () => { photoTarget = id; $('#photoFile').value = ''; $('#photoFile').click(); };
+  if ($('#pPhotoDel')) $('#pPhotoDel').onclick = () => { delete p.photo; commit(); openPerson(id); };
+  $('#pAddChild').onclick = () => { sel = {people: new Set([id]), link: null, unit: null}; addPerson(); };
+  $('#pDel').onclick = () => deletePeople([id]);
+  if (focus) { const i = $('#pName'); i.focus(); i.select(); }
+}
+function openMulti() {
+  panel.dataset.person = '';
+  const ids = [...sel.people];
+  panel.innerHTML = `<h2>Виділено: ${ids.length} <button id="pClose">×</button></h2>
+    <p class="hint">Тягни будь-яку виділену картку — перемістяться всі.</p>
+    <div class="row" style="margin:14px 0;flex-wrap:wrap"><button class="tb primary" id="mUnit">Створити юніт з них</button><button class="tb danger" id="mDel">Видалити</button></div>`;
+  panel.classList.add('open');
+  $('#pClose').onclick = closePanel; $('#mUnit').onclick = addUnit; $('#mDel').onclick = () => deletePeople(ids);
+}
+function openUnit(id, focus) {
+  const u = S.units.find(u => u.id === id); if (!u) return;
+  panel.dataset.person = '';
+  const tasks = u.members.reduce((s, m) => s + (+byId(m)?.tasks || 0), 0);
+  panel.innerHTML = `
+    <h2>Юніт <button id="pClose">×</button></h2>
+    <div class="field"><label>Назва</label><input type="text" id="uName" value="${esc(u.name)}"></div>
+    <div class="field"><label>Колір</label><div class="swatches">${COLORS.map(c => `<button data-c="${c}" class="${c === u.color ? 'on' : ''}" style="background:${c}"></button>`).join('')}</div></div>
+    <div class="stat"><span>Людей</span><b>${u.members.length}</b></div>
+    <div class="stat"><span>Тасок сумарно (можуть зробити)</span><b>${tasks}</b></div>
+    <div class="stat"><span>…з них моушн дизайнери</span><b>${u.members.map(byId).filter(p => p && (p.kind || 'md') === 'md').reduce((s, p) => s + (+p.tasks || 0), 0)}</b></div>
+    <div class="stat" style="margin-bottom:12px"><span>…з них маркетологи</span><b>${u.members.map(byId).filter(p => p && p.kind === 'mkt').reduce((s, p) => s + (+p.tasks || 0), 0)}</b></div>
+    <div class="field"><label>Хто входить у юніт</label><div class="checks">${S.people.map(p => `<label><input type="checkbox" data-p="${p.id}" ${u.members.includes(p.id) ? 'checked' : ''}>${esc(p.name)} <span class="hint">${esc(p.title)}</span></label>`).join('')}</div></div>
+    <div class="row" style="margin:16px 0"><button class="tb danger" id="uDel">Видалити юніт</button></div>
+    <p class="hint">Тягни за назву юніту на полотні, щоб перемістити всю групу.</p>`;
+  panel.classList.add('open');
+  $('#pClose').onclick = closePanel;
+  bindLive($('#uName'), v => u.name = v);
+  panel.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { u.color = b.dataset.c; commit(); openUnit(id); });
+  panel.querySelectorAll('[data-p]').forEach(cb => cb.onchange = () => {
+    u.members = cb.checked ? [...new Set([...u.members, cb.dataset.p])] : u.members.filter(m => m !== cb.dataset.p); commit(); openUnit(id);
+  });
+  $('#uDel').onclick = () => deleteUnit(id);
+  if (focus) { const i = $('#uName'); i.focus(); i.select(); }
+}
+
+// photo upload → resized JPEG data URL
+let photoTarget = null;
+$('#photoFile').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f || !photoTarget) return;
+  const img = new Image(), url = URL.createObjectURL(f);
+  img.onload = () => {
+    const s = 160, c = document.createElement('canvas'); c.width = c.height = s;
+    const m = Math.min(img.width, img.height);
+    c.getContext('2d').drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, s, s);
+    byId(photoTarget).photo = c.toDataURL('image/jpeg', 0.82); URL.revokeObjectURL(url);
+    commit(); openPerson(photoTarget);
+  };
+  img.src = url;
+});
+
+// ---------- export / import ----------
+$('#exportBtn').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(S, null, 2)], {type: 'application/json'}));
+  a.download = 'org-chart.json'; a.click();
+};
+$('#importBtn').onclick = () => { $('#importFile').value = ''; $('#importFile').click(); };
+$('#importFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { const d = normalize(JSON.parse(await f.text())); d.view = S.view; S = d; commit(); fit(); toast('Імпортовано'); }
+  catch { alert('Не вдалося прочитати файл'); }
+});
+
+// ---------- GitHub sync ----------
+const GH = (() => {
+  let cfg = {}; try { cfg = JSON.parse(localStorage.getItem(GH_KEY)) || {}; } catch {}
+  // auto-detect owner/repo when hosted on GitHub Pages
+  if (!cfg.owner && location.hostname.endsWith('.github.io')) {
+    cfg.owner = location.hostname.split('.')[0];
+    cfg.repo = location.pathname.split('/').filter(Boolean)[0] || `${cfg.owner}.github.io`;
+  }
+  cfg.branch ||= 'main'; cfg.path ||= 'data/org.json';
+  let sha = null, timer = null, busy = false, again = false;
+  const api = () => `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path}`;
+  const headers = raw => ({Accept: raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json', ...(cfg.token ? {Authorization: `Bearer ${cfg.token}`} : {})});
+  const enc = s => { const b = new TextEncoder().encode(s); let bin = ''; for (let i = 0; i < b.length; i += 0x8000) bin += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(bin); };
+  const ready = () => cfg.owner && cfg.repo;
+
+  async function fetchRemote() {
+    const r = await fetch(`${api()}?ref=${encodeURIComponent(cfg.branch)}&t=${Date.now()}`, {headers: headers(), cache: 'no-store'});
+    if (r.status === 404) { sha = null; return null; }
+    if (!r.ok) throw new Error(r.status);
+    const meta = await r.json(); sha = meta.sha;
+    if (meta.content) return JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(meta.content.replace(/\n/g, '')), c => c.charCodeAt(0))));
+    const raw = await fetch(`${api()}?ref=${encodeURIComponent(cfg.branch)}`, {headers: headers(true), cache: 'no-store'});
+    return raw.ok ? raw.json() : null;
+  }
+  async function push() {
+    if (!ready() || !cfg.token) return;
+    if (busy) { again = true; return; }
+    busy = true; setStatus('busy', 'Синхронізація…');
+    try {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const body = {message: `Update org chart (${new Date().toLocaleString('uk-UA')})`, content: enc(JSON.stringify(S, null, 1)), branch: cfg.branch, ...(sha ? {sha} : {})};
+        const r = await fetch(api(), {method: 'PUT', headers: {...headers(), 'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+        if (r.ok) { sha = (await r.json()).content.sha; setStatus('ok', 'Збережено в GitHub'); break; }
+        if ((r.status === 409 || r.status === 422) && attempt === 0) { await fetchRemote().catch(() => {}); continue; }
+        throw new Error(r.status === 401 ? 'невірний токен' : r.status === 404 ? 'репо не знайдено / нема доступу' : 'HTTP ' + r.status);
+      }
+    } catch (err) { setStatus('err', 'GitHub: ' + err.message + ' (локально збережено)'); }
+    busy = false;
+    if (again) { again = false; push(); }
+  }
+  return {
+    cfg, ready,
+    schedule() { if (!ready() || !cfg.token) return; setStatus('busy', 'Є незбережені в GitHub зміни…'); clearTimeout(timer); timer = setTimeout(push, 2500); },
+    flush() { if (timer) { clearTimeout(timer); timer = null; push(); } },
+    pending: () => !!timer || busy,
+    save(c) { Object.assign(cfg, c); localStorage.setItem(GH_KEY, JSON.stringify(cfg)); sha = null; },
+    async load() {
+      if (!ready()) return;
+      try {
+        const remote = await fetchRemote();
+        if (remote && remote.people && (fresh || (remote.updatedAt || 0) > (S.updatedAt || 0))) {
+          const view = fresh ? remote.view || S.view : S.view;
+          S = normalize(remote); S.view = view; fresh = false;
+          lastSnap = JSON.stringify(S); localStorage.setItem(KEY, lastSnap); render();
+          if (!remote.view) fit();
+          setStatus('ok', 'Завантажено з GitHub');
+        } else if (cfg.token && (!remote || (S.updatedAt || 0) > (remote.updatedAt || 0))) push();
+      } catch (err) { setStatus('err', 'GitHub недоступний — працюю локально'); }
+    },
+    push
+  };
+})();
+
+$('#syncBtn').onclick = () => {
+  const c = GH.cfg;
+  panel.dataset.person = '';
+  panel.innerHTML = `<h2>Синхронізація з GitHub <button id="pClose">×</button></h2>
+    <p class="hint">Усі зміни завжди автоматично зберігаються в цьому браузері. Якщо додати токен, вони ще й записуються у файл <code>${esc(c.path)}</code> у твоєму репозиторії — тоді актуальна версія відкривається з будь-якого пристрою.</p>
+    <div class="field"><label>Власник (GitHub username)</label><input type="text" id="gOwner" value="${esc(c.owner || '')}"></div>
+    <div class="field"><label>Репозиторій</label><input type="text" id="gRepo" value="${esc(c.repo || '')}"></div>
+    <div class="row"><div class="field" style="flex:1"><label>Гілка</label><input type="text" id="gBranch" value="${esc(c.branch)}"></div>
+    <div class="field" style="flex:1.4"><label>Файл</label><input type="text" id="gPath" value="${esc(c.path)}"></div></div>
+    <div class="field"><label>Personal access token</label><input type="password" id="gToken" value="${esc(c.token || '')}" placeholder="github_pat_…"></div>
+    <p class="hint">Створи fine-grained токен: GitHub → Settings → Developer settings → Fine-grained tokens → доступ лише до цього репо, дозвіл <b>Contents: Read and write</b>. Токен зберігається тільки в цьому браузері.</p>
+    <div class="row" style="margin:14px 0"><button class="tb primary" id="gSave">Зберегти й синхронізувати</button></div>`;
+  panel.classList.add('open');
+  $('#pClose').onclick = closePanel;
+  $('#gSave').onclick = async () => {
+    GH.save({owner: $('#gOwner').value.trim(), repo: $('#gRepo').value.trim(), branch: $('#gBranch').value.trim() || 'main', path: $('#gPath').value.trim() || 'data/org.json', token: $('#gToken').value.trim()});
+    await GH.load(); if (GH.cfg.token) await GH.push(); toast('Налаштування збережено');
+  };
+};
+window.addEventListener('beforeunload', e => { GH.flush(); if (GH.pending()) { e.preventDefault(); e.returnValue = ''; } });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') GH.flush(); });
+
+// ---------- misc ----------
+function setStatus(cls, text) { const s = $('#status'); s.className = cls; s.textContent = text; }
+let toastT; function toast(t) { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 2200); }
+
+$('#addPerson').onclick = addPerson;
+$('#addUnit').onclick = addUnit;
+$('#layoutBtn').onclick = autoLayout;
+$('#undoBtn').onclick = undo; $('#redoBtn').onclick = redo;
+$('#zin').onclick = () => zoomAt(1.2); $('#zout').onclick = () => zoomAt(1 / 1.2); $('#zfit').onclick = fit;
+window.addEventListener('resize', applyView);
+
+if (fresh) { persist(false); lastSnap = JSON.stringify(S); render(); fit(); setTimeout(fit, 300); } else render();
+GH.load();
+})();
+</script>
+</body>
+</html>
