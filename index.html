@@ -88,6 +88,8 @@
   .unit-label .st i.md{color:var(--md)} .unit-label .st i.mkt{color:#c46a00}
   .unit-label .st i.pos{background:#e3f6ea;color:#137a3a} .unit-label .st i.neg{background:#fde8e8;color:#c62828}
   .unit.sel{border-style:solid;border-width:2px}
+  .unit.team{border-style:solid;border-width:2.5px;border-radius:18px}
+  .unit.team>.unit-label{font-size:13px;padding:5px 12px}
   .unit.drop{border-style:solid;border-width:3px;box-shadow:0 0 0 5px rgba(26,155,75,.25)}
 
   /* zoom */
@@ -246,6 +248,23 @@ function normalize(s) {
     s.links = out; s.v = 3;
   }
   if (s.v < 4) { s.people.forEach(p => { if (p.title === 'Marketer') p.title = 'CMM'; }); s.v = 4; } // v4: Marketer → CMM
+  // teams: a unit may sit inside one top-level team unit (u.parent)
+  s.units.forEach(u => { const par = s.units.find(x => x.id === u.parent); if (!par || par.parent || par === u) delete u.parent; });
+  if (s.v < 5) {
+    // v5: Indoor Walking + Military + R&D 1 become angles of one "Core team"
+    const kids = ['Indoor Walking', 'Military', 'R&D 1'].map(n => s.units.find(u => u.name === n && !u.parent)).filter(Boolean);
+    if (kids.length === 3) {
+      const core = {id: uid(), name: 'Core team', color: '#534AB7', members: []};
+      s.units.push(core); kids.forEach(k => k.parent = core.id);
+      const kidIds = new Set(kids.map(k => k.id));
+      s.links = s.links.filter(l => !kidIds.has(l.to) && !kidIds.has(l.from));
+      const incoming = new Set(s.links.map(l => l.to));
+      const root = s.people.filter(q => q.kind === 'org' && !incoming.has(q.id)).sort((a, b) => a.y - b.y)[0];
+      if (root) s.links.unshift({from: root.id, to: core.id});
+      s.needsLayout = true;
+    }
+    s.v = 5;
+  }
   return s;
 }
 let S, fresh = false;
@@ -294,7 +313,7 @@ function groupTotals(p) {
   else {
     const seen = new Set(), walk = id => childrenOf(id).forEach(c => {
       if (seen.has(c)) return; seen.add(c);
-      unitById(c)?.members.forEach(m => { seen.add(m); walk(m); });
+      const cu = unitById(c); if (cu) { subUnits(cu).forEach(x => seen.add(x.id)); allMembers(cu).forEach(m => { seen.add(m); walk(m); }); }
       walk(c);
     });
     walk(p.id); people = S.people.filter(q => seen.has(q.id));
@@ -302,7 +321,9 @@ function groupTotals(p) {
   const sum = k => people.filter(q => (q.kind || 'md') === k).reduce((s, q) => s + (+q.tasks || 0), 0);
   return {md: sum('md'), mkt: sum('mkt')};
 }
-const capacity = (u, kind) => u.members.map(byId).filter(p => p && (p.kind || 'md') === kind).reduce((s, p) => s + (+p.tasks || 0), 0);
+const subUnits = u => S.units.filter(c => c.parent === u.id);
+const allMembers = u => [...new Set([...u.members, ...subUnits(u).flatMap(allMembers)])];
+const capacity = (u, kind) => allMembers(u).map(byId).filter(p => p && (p.kind || 'md') === kind).reduce((s, p) => s + (+p.tasks || 0), 0);
 const childrenOf = id => S.links.filter(l => l.from === id).map(l => l.to);
 
 function hiddenSet() {
@@ -310,7 +331,7 @@ function hiddenSet() {
   const walk = id => childrenOf(id).forEach(c => {
     if (hidden.has(c)) return;
     hidden.add(c);
-    unitById(c)?.members.forEach(m => { hidden.add(m); walk(m); });
+    const cu = unitById(c); if (cu) { subUnits(cu).forEach(x => hidden.add(x.id)); allMembers(cu).forEach(m => { hidden.add(m); walk(m); }); }
     walk(c);
   });
   S.people.filter(p => p.collapsed).forEach(p => walk(p.id));
@@ -376,21 +397,20 @@ function renderEdges(temp) {
 }
 function unitBox(u, hidden, exclude) {
   const ms = u.members.map(byId).filter(p => p && !hidden.has(p.id) && !exclude?.has(p.id));
-  if (!ms.length) return null;
-  const pad = 18;
-  return {
-    x: Math.min(...ms.map(p => p.x)) - pad,
-    y: Math.min(...ms.map(p => p.y)) - AV - pad - 8,
-    r: Math.max(...ms.map(p => p.x + W)) + pad,
-    b: Math.max(...ms.map(p => p.y + H)) + pad, ms
-  };
+  const pad = 18, bx = {x: Infinity, y: Infinity, r: -Infinity, b: -Infinity};
+  ms.forEach(p => { bx.x = Math.min(bx.x, p.x - pad); bx.y = Math.min(bx.y, p.y - AV - pad - 8); bx.r = Math.max(bx.r, p.x + W + pad); bx.b = Math.max(bx.b, p.y + H + pad); });
+  subUnits(u).forEach(c => {
+    const cb = unitBox(c, hidden, exclude); if (!cb) return;
+    bx.x = Math.min(bx.x, cb.x - 16); bx.y = Math.min(bx.y, cb.y - 34); bx.r = Math.max(bx.r, cb.r + 16); bx.b = Math.max(bx.b, cb.b + 16);
+  });
+  return isFinite(bx.x) ? bx : null;
 }
 function renderUnits() {
   const hidden = hiddenSet();
-  unitsEl.innerHTML = S.units.map(u => {
+  unitsEl.innerHTML = [...S.units].sort((a, b) => !!a.parent - !!b.parent).map(u => {   // teams first so they sit behind their angles
     const bx = unitBox(u, hidden); if (!bx) return '';
     const md = capacity(u, 'md'), mkt = capacity(u, 'mkt'), diff = md - mkt;
-    return `<div class="unit${sel.unit === u.id ? ' sel' : ''}${drag?.target === u.id ? ' drop' : ''}" data-uid="${u.id}" style="left:${bx.x}px;top:${bx.y}px;width:${bx.r - bx.x}px;height:${bx.b - bx.y}px;border-color:${u.color};background:${u.color}10">
+    return `<div class="unit${subUnits(u).length ? ' team' : ''}${sel.unit === u.id ? ' sel' : ''}${drag?.target === u.id ? ' drop' : ''}" data-uid="${u.id}" style="left:${bx.x}px;top:${bx.y}px;width:${bx.r - bx.x}px;height:${bx.b - bx.y}px;border-color:${u.color};background:${u.color}10">
       <div class="unit-label" data-unit="${u.id}" style="background:${u.color}" title="Моушн дизайнери можуть зробити ${md}, CMM — ${mkt}. Різниця ${diff >= 0 ? '+' : ''}${diff}">${esc(u.name)}<span class="st"><i class="md">MD ${md}</i><i class="mkt">CMM ${mkt}</i><i class="${diff >= 0 ? 'pos' : 'neg'}">${diff > 0 ? '+' : diff < 0 ? '−' : ''}${Math.abs(diff)}</i></span></div></div>`;
   }).join('');
 }
@@ -422,15 +442,22 @@ function fit() {
 // ---------- auto layout (tidy tree) ----------
 function autoLayout() {
   // nodes = people outside units + whole units (members keep their arrangement)
-  const GAP = 40, VGAP = 90, UP = 26, UPAD = 18, snap = v => Math.round(v / 10) * 10;
+  const GAP = 40, VGAP = 90, snap = v => Math.round(v / 10) * 10;
   const nodes = new Map();
+  const noHide = new Set(), shift = (u, dx, dy) => allMembers(u).forEach(m => { const p = byId(m); p.x += dx; p.y += dy; });
   S.people.forEach(p => { if (!unitOf(p.id)) nodes.set(p.id, {p, vw: W, vh: H + AV}); });
-  S.units.forEach(u => {
-    const ms = u.members.map(byId).filter(Boolean); if (!ms.length) return;
-    const x0 = Math.min(...ms.map(p => p.x)), y0 = Math.min(...ms.map(p => p.y));
-    nodes.set(u.id, {ms, x0, y0, vw: Math.max(...ms.map(p => p.x + W)) - x0 + 2 * UPAD, vh: Math.max(...ms.map(p => p.y + H)) - y0 + AV + UP + UPAD});
+  S.units.filter(u => !u.parent).forEach(u => {
+    // a team: lay its angles side by side, top-aligned, before placing the team as one block
+    const subs = subUnits(u).map(c => ({c, b: unitBox(c, noHide)})).filter(x => x.b).sort((a, b) => a.b.x - b.b.x);
+    if (subs.length) {
+      let cx = subs[0].b.x; const top = Math.min(...subs.map(x => x.b.y));
+      subs.forEach(({c, b}) => { shift(c, snap(cx - b.x), snap(top - b.y)); cx += (b.r - b.x) + GAP; });
+    }
+    const bx = unitBox(u, noHide); if (!bx) return;
+    nodes.set(u.id, {u, bx, vw: bx.r - bx.x, vh: bx.b - bx.y});
   });
-  const nid = id => unitOf(id)?.id || id, kids = new Map([...nodes.keys()].map(k => [k, []])), inc = new Set();
+  const top = u => u.parent ? unitById(u.parent) : u;
+  const nid = id => { const u = unitOf(id) || unitById(id); return u ? top(u).id : id; }, kids = new Map([...nodes.keys()].map(k => [k, []])), inc = new Set();
   S.links.forEach(l => {
     const f = nid(l.from), t = nid(l.to);
     if (f !== t && nodes.has(f) && nodes.has(t) && !kids.get(f).includes(t)) { kids.get(f).push(t); inc.add(t); }
@@ -451,9 +478,9 @@ function autoLayout() {
   [...nodes.keys()].forEach(k => { if (!seen.has(k)) place(k, 0); });
   const rowY = [0]; rowH.forEach((h, d) => rowY[d + 1] = rowY[d] + h + VGAP);
   nodes.forEach(n => {
-    const left = n.cx - n.vw / 2, top = rowY[n.d];
-    if (n.p) { n.p.x = snap(left); n.p.y = snap(top + AV); }
-    else { const dx = snap(left + UPAD - n.x0), dy = snap(top + UP + AV - n.y0); n.ms.forEach(p => { p.x += dx; p.y += dy; }); }
+    const left = n.cx - n.vw / 2, y = rowY[n.d];
+    if (n.p) { n.p.x = snap(left); n.p.y = snap(y + AV); }
+    else shift(n.u, snap(left - n.bx.x), snap(y - n.bx.y));
   });
   commit(); fit();
 }
@@ -465,7 +492,7 @@ function dropUnit(id, ids) {
   const p = byId(id), cx = p.x + W / 2, cy = p.y + H / 2, hidden = hiddenSet(), excl = new Set(ids);
   let best = null, area = Infinity;
   S.units.forEach(u => {
-    if (u.members.includes(id)) return;
+    if (u.members.includes(id) || subUnits(u).length) return;
     const bx = unitBox(u, hidden, excl);
     if (bx && cx >= bx.x && cx <= bx.r && cy >= bx.y && cy <= bx.b) {
       const a = (bx.r - bx.x) * (bx.b - bx.y); if (a < area) { area = a; best = u; }
@@ -486,7 +513,7 @@ viewport.addEventListener('pointerdown', e => {
     drag = {mode: 'card', id, ids, start: w, orig: ids.map(i => ({p: byId(i), x: byId(i).x, y: byId(i).y})), moved: false, shift: e.shiftKey};
   } else if (ulabel) {
     const u = S.units.find(u => u.id === ulabel.dataset.unit);
-    drag = {mode: 'unit', u, start: w, orig: u.members.map(i => ({p: byId(i), x: byId(i).x, y: byId(i).y})), moved: false};
+    drag = {mode: 'unit', u, start: w, orig: allMembers(u).map(i => ({p: byId(i), x: byId(i).x, y: byId(i).y})), moved: false};
   } else if (hit) {
     sel = {people: new Set(), link: +hit.dataset.link, unit: null}; closePanel(); render();
     toast('Звʼязок виділено — натисни Delete, щоб видалити');
@@ -622,8 +649,8 @@ function addUnit() {
 }
 function deleteUnit(id) {
   const u = S.units.find(u => u.id === id);
-  if (!confirm(`Видалити юніт «${u.name}»? Люди залишаться.`)) return;
-  S.units = S.units.filter(x => x.id !== id); normalize(S); sel.unit = null; closePanel(); commit();
+  if (!confirm(subUnits(u).length ? `Розформувати команду «${u.name}»? Кути стануть окремими юнітами.` : `Видалити юніт «${u.name}»? Люди залишаться.`)) return;
+  S.units = S.units.filter(x => x.id !== id); S.units.forEach(x => { if (x.parent === id) delete x.parent; }); normalize(S); sel.unit = null; closePanel(); commit();
 }
 
 // ---------- side panel ----------
@@ -647,7 +674,7 @@ function openPerson(id, focus) {
     <div class="field"><label>Роль</label><div class="kind-pick">${[['md','Моушн дизайнер'],['mkt','CMM'],['org','Група']].map(([k,l]) => `<button data-kind="${k}" class="${(p.kind || 'md') === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
     <div class="field"><label>Скільки тасок може зробити</label>
       <div class="stepper"><button id="pDec">−</button><input type="number" min="0" id="pTasks" value="${+p.tasks || 0}" style="width:90px"><button id="pInc">+</button></div></div>
-    <div class="field"><label>Юніти</label><div class="checks">${S.units.length ? S.units.map(u => `<label><input type="checkbox" data-unit="${u.id}" ${u.members.includes(id) ? 'checked' : ''}><span style="width:10px;height:10px;border-radius:50%;background:${u.color}"></span>${esc(u.name)}</label>`).join('') : '<div class="hint">Юнітів ще немає</div>'}</div></div>
+    <div class="field"><label>Юніти</label><div class="checks">${S.units.length ? S.units.filter(u => !subUnits(u).length).map(u => `<label><input type="checkbox" data-unit="${u.id}" ${u.members.includes(id) ? 'checked' : ''}><span style="width:10px;height:10px;border-radius:50%;background:${u.color}"></span>${esc(u.name)}</label>`).join('') : '<div class="hint">Юнітів ще немає</div>'}</div></div>
     <div class="field"><label>Керівник(и)</label><div class="hint">${parents.length ? parents.map(x => esc(x.name)).join(', ') : '—'}</div></div>
     <div class="field"><label>Підлеглі (${kids.length})</label><div class="hint">${kids.length ? kids.map(x => esc(x.name)).join(', ') : '—'}</div></div>
     <div class="row" style="margin:16px 0"><button class="tb" id="pAddChild">+ Підлеглий</button><button class="tb danger" id="pDel">Видалити</button></div>
@@ -683,18 +710,23 @@ function openMulti() {
 function openUnit(id, focus) {
   const u = S.units.find(u => u.id === id); if (!u) return;
   panel.dataset.person = '';
-  const tasks = u.members.reduce((s, m) => s + (+byId(m)?.tasks || 0), 0);
+  const all = allMembers(u), subs = subUnits(u), isTeam = subs.length > 0;
+  const tasks = all.reduce((s, m) => s + (+byId(m)?.tasks || 0), 0);
+  const teams = S.units.filter(x => x.id !== u.id && !x.parent);
   panel.innerHTML = `
-    <h2>Юніт <button id="pClose">×</button></h2>
+    <h2>${isTeam ? 'Команда' : 'Юніт'} <button id="pClose">×</button></h2>
     <div class="field"><label>Назва</label><input type="text" id="uName" value="${esc(u.name)}"></div>
     <div class="field"><label>Колір</label><div class="swatches">${COLORS.map(c => `<button data-c="${c}" class="${c === u.color ? 'on' : ''}" style="background:${c}"></button>`).join('')}</div></div>
-    <div class="stat"><span>Людей</span><b>${u.members.length}</b></div>
+    ${isTeam ? `<div class="field"><label>Кути команди</label><div class="hint">${subs.map(c => esc(c.name)).join(', ')}</div></div>` : `
+    <div class="field"><label>Входить у команду</label><select id="uParent" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:8px;font:inherit">
+      <option value="">— окремий юніт —</option>${teams.map(t => `<option value="${t.id}" ${u.parent === t.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}<option value="__new">+ Нова команда…</option></select></div>`}
+    <div class="stat"><span>Людей</span><b>${all.length}</b></div>
     <div class="stat"><span>Тасок сумарно (можуть зробити)</span><b>${tasks}</b></div>
-    <div class="stat"><span>…з них моушн дизайнери</span><b>${u.members.map(byId).filter(p => p && (p.kind || 'md') === 'md').reduce((s, p) => s + (+p.tasks || 0), 0)}</b></div>
-    <div class="stat"><span>…з них CMM</span><b>${u.members.map(byId).filter(p => p && p.kind === 'mkt').reduce((s, p) => s + (+p.tasks || 0), 0)}</b></div>
+    <div class="stat"><span>…з них моушн дизайнери</span><b>${capacity(u, 'md')}</b></div>
+    <div class="stat"><span>…з них CMM</span><b>${capacity(u, 'mkt')}</b></div>
     <div class="stat" style="margin-bottom:12px"><span>Різниця MD − CMM</span><b style="color:${capacity(u,'md') - capacity(u,'mkt') >= 0 ? '#137a3a' : '#c62828'}">${capacity(u,'md') - capacity(u,'mkt')}</b></div>
-    <div class="field"><label>Хто входить у юніт</label><div class="checks">${S.people.map(p => `<label><input type="checkbox" data-p="${p.id}" ${u.members.includes(p.id) ? 'checked' : ''}>${esc(p.name)} <span class="hint">${esc(p.title)}</span></label>`).join('')}</div></div>
-    <div class="row" style="margin:16px 0"><button class="tb danger" id="uDel">Видалити юніт</button></div>
+    ${isTeam ? '' : `<div class="field"><label>Хто входить у юніт</label><div class="checks">${S.people.map(p => `<label><input type="checkbox" data-p="${p.id}" ${u.members.includes(p.id) ? 'checked' : ''}>${esc(p.name)} <span class="hint">${esc(p.title)}</span></label>`).join('')}</div></div>`}
+    <div class="row" style="margin:16px 0"><button class="tb danger" id="uDel">${isTeam ? 'Розформувати команду' : 'Видалити юніт'}</button></div>
     <p class="hint">Тягни за назву юніту на полотні, щоб перемістити всю групу.</p>`;
   panel.classList.add('open');
   $('#pClose').onclick = closePanel;
@@ -704,6 +736,18 @@ function openUnit(id, focus) {
     u.members = cb.checked ? [...new Set([...u.members, cb.dataset.p])] : u.members.filter(m => m !== cb.dataset.p); commit(); openUnit(id);
   });
   $('#uDel').onclick = () => deleteUnit(id);
+  if ($('#uParent')) $('#uParent').onchange = e => {
+    let v = e.target.value;
+    if (v === '__new') {
+      const name = prompt('Назва команди', 'Нова команда'); if (!name) return openUnit(id);
+      const t = {id: uid(), name, color: '#534AB7', members: []};
+      S.units.push(t); v = t.id;
+      S.links.forEach(l => { if (l.to === u.id) l.to = t.id; });   // the team takes over the unit's incoming line
+    }
+    if (v) { u.parent = v; S.links = S.links.filter(l => l.to !== u.id && l.from !== u.id); }
+    else delete u.parent;
+    commit(); openUnit(id);
+  };
   if (focus) { const i = $('#uName'); i.focus(); i.select(); }
 }
 
@@ -876,6 +920,7 @@ $('#zin').onclick = () => zoomAt(1.2); $('#zout').onclick = () => zoomAt(1 / 1.2
 window.addEventListener('resize', applyView);
 
 if (fresh) { persist(false); lastSnap = JSON.stringify(S); render(); fit(); setTimeout(fit, 300); } else render();
+if (S.needsLayout) { delete S.needsLayout; autoLayout(); undoStack.length = 0; }
 GH.load();
 })();
 </script>
