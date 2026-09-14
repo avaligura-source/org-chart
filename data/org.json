@@ -1,0 +1,620 @@
+{
+ "people": [
+  {
+   "id": "j3giod0y",
+   "name": "Creative Team",
+   "title": "New Structure",
+   "kind": "org",
+   "tasks": 0,
+   "x": 2070,
+   "y": 30
+  },
+  {
+   "id": "4cu8by0o",
+   "name": "Nataliia Mak",
+   "title": "Co-lead",
+   "kind": "md",
+   "tasks": 50,
+   "x": 30,
+   "y": 320
+  },
+  {
+   "id": "m3fziij8",
+   "name": "Dmytro Sha",
+   "title": "Motion Designer",
+   "kind": "md",
+   "tasks": 50,
+   "x": 30,
+   "y": 470
+  },
+  {
+   "id": "cf3n4omq",
+   "name": "Taras Kol",
+   "title": "Motion Designer",
+   "kind": "md",
+   "tasks": 55,
+   "x": 30,
+   "y": 620
+  },
+  {
+   "id": "pv3985fn",
+   "name": "Anna Ant",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 50,
+   "x": 230,
+   "y": 320
+  },
+  {
+   "id": "rpep5t7c",
+   "name": "Anastasiia Zad",
+   "title": "Co-lead",
+   "kind": "md",
+   "tasks": 50,
+   "x": 480,
+   "y": 320
+  },
+  {
+   "id": "lw5xmdmg",
+   "name": "Mariana Tro",
+   "title": "Motion Designer",
+   "kind": "md",
+   "tasks": 80,
+   "x": 480,
+   "y": 470
+  },
+  {
+   "id": "g1d0zc66",
+   "name": "Taras Bud",
+   "title": "Motion Designer",
+   "kind": "md",
+   "tasks": 60,
+   "x": 480,
+   "y": 620
+  },
+  {
+   "id": "19389w7l",
+   "name": "Yelyzaveta Hul",
+   "title": "Freelance",
+   "kind": "md",
+   "tasks": 40,
+   "x": 480,
+   "y": 770
+  },
+  {
+   "id": "s2olkwbc",
+   "name": "Anastasiia Bur",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 100,
+   "x": 680,
+   "y": 320
+  },
+  {
+   "id": "lo8p2zj4",
+   "name": "Dmytro Dud",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 100,
+   "x": 680,
+   "y": 470
+  },
+  {
+   "id": "4xx2dql5",
+   "name": "Yuliia Tol",
+   "title": "Co-lead",
+   "kind": "md",
+   "tasks": 50,
+   "x": 1590,
+   "y": 280
+  },
+  {
+   "id": "zfmb9scu",
+   "name": "Alla Hor",
+   "title": "Motion Designer",
+   "kind": "md",
+   "tasks": 50,
+   "x": 1590,
+   "y": 430
+  },
+  {
+   "id": "a4xq26j4",
+   "name": "Maryna Zhy",
+   "title": "Motion Designer",
+   "kind": "md",
+   "tasks": 80,
+   "x": 1590,
+   "y": 580
+  },
+  {
+   "id": "lyrns2q2",
+   "name": "Yuliia Ste",
+   "title": "Motion Designer",
+   "kind": "md",
+   "tasks": 80,
+   "x": 1590,
+   "y": 730
+  },
+  {
+   "id": "gp2vkjtv",
+   "name": "Yuliia Pid",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 50,
+   "x": 1790,
+   "y": 280
+  },
+  {
+   "id": "b73bfjwt",
+   "name": "Tetiana Shk",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 100,
+   "x": 1790,
+   "y": 430
+  },
+  {
+   "id": "p6ua2i5n",
+   "name": "Anna Ost",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 100,
+   "x": 1790,
+   "y": 580
+  },
+  {
+   "id": "i5x1frrp",
+   "name": "Polina Hlu",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 100,
+   "x": 1790,
+   "y": 730
+  },
+  {
+   "id": "7we4cnwl",
+   "name": "Albert Mkr",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 100,
+   "x": 1790,
+   "y": 880
+  },
+  {
+   "id": "rx1be2rc",
+   "name": "Ihor M",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 100,
+   "x": 1790,
+   "y": 1030
+  },
+  {
+   "id": "hc377hcr",
+   "name": "1-2 нових MD",
+   "title": "Вакансія",
+   "kind": "md",
+   "tasks": 0,
+   "x": 2030,
+   "y": 280,
+   "note": "На період пошуку MD буде допомога частково з Indoor Walking / Military"
+  },
+  {
+   "id": "b7eta7ly",
+   "name": "Olha Laz",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 100,
+   "x": 2230,
+   "y": 280
+  },
+  {
+   "id": "j6kt6una",
+   "name": "Olha Vol",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 100,
+   "x": 2230,
+   "y": 430
+  },
+  {
+   "id": "g3ow6evl",
+   "name": "Daniil Mor",
+   "title": "Motion Designer",
+   "kind": "md",
+   "tasks": 80,
+   "x": 2480,
+   "y": 280
+  },
+  {
+   "id": "r9bcrmsl",
+   "name": "1 новий MD",
+   "title": "Вакансія",
+   "kind": "md",
+   "tasks": 0,
+   "x": 2480,
+   "y": 430
+  },
+  {
+   "id": "njjexo4t",
+   "name": "Alisa Per",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 100,
+   "x": 2680,
+   "y": 280
+  },
+  {
+   "id": "tpymfgo3",
+   "name": "Viktoriia Ch",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 100,
+   "x": 2680,
+   "y": 430
+  },
+  {
+   "id": "fbv95kt9",
+   "name": "Kateryna She",
+   "title": "Motion Designer",
+   "kind": "md",
+   "tasks": 80,
+   "x": 2920,
+   "y": 280
+  },
+  {
+   "id": "wxzz3pgi",
+   "name": "3-4 нових MD",
+   "title": "Вакансія",
+   "kind": "md",
+   "tasks": 0,
+   "x": 2920,
+   "y": 430,
+   "note": "На період пошуку MD буде допомога частково з Indoor Walking / Military / Chair Yoga"
+  },
+  {
+   "id": "uqetzt3s",
+   "name": "Oksana Pry",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 50,
+   "x": 3120,
+   "y": 280
+  },
+  {
+   "id": "gz5qnv8w",
+   "name": "Daryna Kyr",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 100,
+   "x": 3120,
+   "y": 430
+  },
+  {
+   "id": "2724eid0",
+   "name": "Karina Dar",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 100,
+   "x": 3120,
+   "y": 580
+  },
+  {
+   "id": "w9fezrt7",
+   "name": "Lina Ovc",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 100,
+   "x": 3120,
+   "y": 730
+  },
+  {
+   "id": "5iaxzjdc",
+   "name": "Oleksii Dmy",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 100,
+   "x": 3120,
+   "y": 880
+  },
+  {
+   "id": "hipgk5m5",
+   "name": "Olena Str",
+   "title": "Motion Designer",
+   "kind": "md",
+   "tasks": 80,
+   "x": 3370,
+   "y": 280
+  },
+  {
+   "id": "lhhz0s2q",
+   "name": "Vadym Bla",
+   "title": "Motion Designer",
+   "kind": "md",
+   "tasks": 80,
+   "x": 3370,
+   "y": 430
+  },
+  {
+   "id": "o4spuujq",
+   "name": "Vitalii Dem",
+   "title": "Freelance",
+   "kind": "md",
+   "tasks": 40,
+   "x": 3370,
+   "y": 580
+  },
+  {
+   "id": "710z0t37",
+   "name": "Viktoriia Zle",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 80,
+   "x": 3570,
+   "y": 280
+  },
+  {
+   "id": "bxbpy6z6",
+   "name": "Alina Fer",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 160,
+   "x": 3570,
+   "y": 430
+  },
+  {
+   "id": "ljzdcgj6",
+   "name": "R&D Teams",
+   "title": "Дослідження",
+   "kind": "org",
+   "tasks": 0,
+   "x": 3920,
+   "y": 30
+  },
+  {
+   "id": "g41ruwfi",
+   "name": "Oleksandr For",
+   "title": "Motion Designer",
+   "kind": "md",
+   "tasks": 50,
+   "x": 920,
+   "y": 320
+  },
+  {
+   "id": "ig2vuefj",
+   "name": "Yana Pat",
+   "title": "Motion Designer",
+   "kind": "md",
+   "tasks": 60,
+   "x": 1100,
+   "y": 320
+  },
+  {
+   "id": "6bibly45",
+   "name": "Natalia Voy",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 100,
+   "x": 920,
+   "y": 470
+  },
+  {
+   "id": "8lbcpuvd",
+   "name": "Oleksii Nad",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 100,
+   "x": 1120,
+   "y": 470
+  },
+  {
+   "id": "bsz0bqvg",
+   "name": "Pavlo Ber",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 100,
+   "x": 1320,
+   "y": 470
+  },
+  {
+   "id": "z22fj1f6",
+   "name": "Anton Val",
+   "title": "Motion Designer",
+   "kind": "md",
+   "tasks": 50,
+   "x": 3820,
+   "y": 280,
+   "note": "Підключення до інших кутів після донайму"
+  },
+  {
+   "id": "wiq8ywuu",
+   "name": "1-2 нових MD",
+   "title": "Вакансія",
+   "kind": "md",
+   "tasks": 0,
+   "x": 4020,
+   "y": 280
+  },
+  {
+   "id": "lsjtseug",
+   "name": "Veronika Laz",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 100,
+   "x": 3820,
+   "y": 430
+  },
+  {
+   "id": "cuigpebk",
+   "name": "Viacheslav Rod",
+   "title": "CMM",
+   "kind": "mkt",
+   "tasks": 100,
+   "x": 4020,
+   "y": 430
+  }
+ ],
+ "links": [
+  {
+   "from": "j3giod0y",
+   "to": "9ei2p3ce"
+  },
+  {
+   "from": "j3giod0y",
+   "to": "r7io9twb"
+  },
+  {
+   "from": "j3giod0y",
+   "to": "8x3ggobc"
+  },
+  {
+   "from": "j3giod0y",
+   "to": "tlkifpgh"
+  },
+  {
+   "from": "j3giod0y",
+   "to": "r9np4yuf"
+  },
+  {
+   "from": "j3giod0y",
+   "to": "yoor7dcj"
+  },
+  {
+   "from": "ljzdcgj6",
+   "to": "fj1ahak6"
+  }
+ ],
+ "units": [
+  {
+   "id": "d1zw2lsp",
+   "name": "Indoor Walking",
+   "color": "#1a9b4b",
+   "members": [
+    "4cu8by0o",
+    "m3fziij8",
+    "cf3n4omq",
+    "pv3985fn"
+   ],
+   "parent": "9ei2p3ce"
+  },
+  {
+   "id": "w5mvi7rh",
+   "name": "Military",
+   "color": "#2f6bff",
+   "members": [
+    "rpep5t7c",
+    "lw5xmdmg",
+    "g1d0zc66",
+    "19389w7l",
+    "s2olkwbc",
+    "lo8p2zj4"
+   ],
+   "parent": "9ei2p3ce"
+  },
+  {
+   "id": "r7io9twb",
+   "name": "ChairYoga",
+   "color": "#7c4dff",
+   "members": [
+    "4xx2dql5",
+    "zfmb9scu",
+    "a4xq26j4",
+    "lyrns2q2",
+    "gp2vkjtv",
+    "b73bfjwt",
+    "p6ua2i5n",
+    "i5x1frrp",
+    "7we4cnwl",
+    "rx1be2rc"
+   ]
+  },
+  {
+   "id": "8x3ggobc",
+   "name": "TikTok + Snapchat",
+   "color": "#e0457b",
+   "members": [
+    "hc377hcr",
+    "b7eta7ly",
+    "j6kt6una"
+   ]
+  },
+  {
+   "id": "tlkifpgh",
+   "name": "Google",
+   "color": "#f08c00",
+   "members": [
+    "g3ow6evl",
+    "r9bcrmsl",
+    "njjexo4t",
+    "tpymfgo3"
+   ]
+  },
+  {
+   "id": "r9np4yuf",
+   "name": "Локалізації",
+   "color": "#0f9bb5",
+   "members": [
+    "fbv95kt9",
+    "wxzz3pgi",
+    "uqetzt3s",
+    "gz5qnv8w",
+    "2724eid0",
+    "w9fezrt7",
+    "5iaxzjdc"
+   ]
+  },
+  {
+   "id": "yoor7dcj",
+   "name": "Applovin",
+   "color": "#d9480f",
+   "members": [
+    "hipgk5m5",
+    "lhhz0s2q",
+    "o4spuujq",
+    "710z0t37",
+    "bxbpy6z6"
+   ]
+  },
+  {
+   "id": "3015poaj",
+   "name": "R&D 1",
+   "color": "#2f6bff",
+   "members": [
+    "g41ruwfi",
+    "ig2vuefj",
+    "6bibly45",
+    "8lbcpuvd",
+    "bsz0bqvg"
+   ],
+   "parent": "9ei2p3ce"
+  },
+  {
+   "id": "fj1ahak6",
+   "name": "R&D 2",
+   "color": "#7c4dff",
+   "members": [
+    "z22fj1f6",
+    "wiq8ywuu",
+    "lsjtseug",
+    "cuigpebk"
+   ]
+  },
+  {
+   "id": "9ei2p3ce",
+   "name": "Core team",
+   "color": "#534AB7",
+   "members": []
+  }
+ ],
+ "view": {
+  "k": 0.8274240880502782,
+  "x": -730.7555644418096,
+  "y": 260.70078175501766
+ },
+ "updatedAt": 1789391002590,
+ "v": 5,
+ "hiring": {
+  "count": 4,
+  "per": 80
+ }
+}
