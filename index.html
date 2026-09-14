@@ -194,7 +194,9 @@
 <script>
 (() => {
 const W = 170, H = 108, AV = 30;            // card size, avatar overhang
-const TOP_NAME = 'Creative Team';   // the top group card is always called this
+const TOP_NAME = 'Creative Team';
+// shared storage (Google Apps Script web app, see apps-script.gs): everyone's edits are saved there, no token needed
+const SHARED_URL = 'https://script.google.com/macros/s/AKfycbwyA9BaSoEOwvW3OUM5A2zTyidjQMTUfnRRaWv1zIlXqeQG90zVC-BXR-frV3Yx5R1JEw/exec';   // the top group card is always called this
 const KEY = 'orgchart.motion.v2', GH_KEY = 'orgchart.github';
 const COLORS = ['#2f6bff','#7c4dff','#e0457b','#f08c00','#1a9b4b','#0f9bb5','#8a6d3b','#5b616b'];
 const $ = s => document.querySelector(s);
@@ -297,7 +299,7 @@ function persist(remote = true) {
   const snap = JSON.stringify(S);
   try { localStorage.setItem(KEY, snap); setStatus('ok', 'Збережено'); }
   catch { setStatus('err', 'Не вдалося зберегти (завеликі фото?)'); }
-  if (remote) GH.schedule();
+  if (remote) (SHARED_URL ? SHARED.schedule() : GH.schedule());
 }
 // call after every user change
 function commit() {
@@ -938,6 +940,54 @@ const GH = (() => {
   };
 })();
 
+// ---------- shared storage for everyone ----------
+const SHARED = (() => {
+  let timer = null, busy = false, again = false;
+  async function get() {
+    const r = await fetch(SHARED_URL + '?t=' + Date.now(), {cache: 'no-store'});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    return d && Array.isArray(d.people) && d.people.length ? d : null;
+  }
+  function adopt(remote, msg) {
+    const view = S.view; S = normalize(remote); S.view = view; fresh = false;
+    lastSnap = JSON.stringify(S); try { localStorage.setItem(KEY, lastSnap); } catch {}
+    render(); setStatus('ok', msg);
+  }
+  async function push(keepalive) {
+    if (busy) { again = true; return; }
+    busy = true; setStatus('busy', 'Зберігаю…');
+    try {
+      const r = await fetch(SHARED_URL, {method: 'POST', body: JSON.stringify(S), keepalive: !!keepalive, headers: {'Content-Type': 'text/plain;charset=utf-8'}});
+      const res = await r.json();
+      if (res.ok) setStatus('ok', 'Збережено для всіх');
+      else if (res.stale && res.data) { adopt(res.data, 'Оновлено змінами іншої людини'); toast('Хтось щойно зберіг новішу версію — показую її'); }
+      else throw new Error(res.error || 'помилка');
+    } catch (err) { setStatus('err', 'Не збережено для всіх (' + err.message + ') — спробую ще'); clearTimeout(timer); timer = setTimeout(() => { timer = null; push(); }, 8000); }
+    busy = false;
+    if (again) { again = false; push(); }
+  }
+  return {
+    schedule() { setStatus('busy', 'Зберігаю…'); clearTimeout(timer); timer = setTimeout(() => { timer = null; push(); }, 1200); },
+    flush() { if (timer) { clearTimeout(timer); timer = null; push(true); } },
+    pending: () => !!timer || busy,
+    async load() {
+      try {
+        const remote = await get();
+        if (remote) { if (JSON.stringify({...remote, view: 0}) !== JSON.stringify({...S, view: 0})) adopt(remote, 'Остання версія'); else setStatus('ok', 'Остання версія'); }
+        else { await GH.load(); push(); }   // first run: seed shared storage from data/org.json
+      } catch (err) { setStatus('err', 'Спільне сховище недоступне — працюю локально'); }
+      // pick up other people's edits: every 10 s and whenever the tab comes back into view
+      const poll = async () => {
+        if (document.hidden || drag || timer || busy || panel.classList.contains('open')) return;
+        try { const r = await get(); if (r && (r.updatedAt || 0) > (S.updatedAt || 0)) adopt(r, 'Оновлено змінами інших'); } catch {}
+      };
+      setInterval(poll, 10000);
+      document.addEventListener('visibilitychange', poll);
+    }
+  };
+})();
+
 $('#syncBtn').onclick = () => {
   const c = GH.cfg;
   panel.dataset.person = '';
@@ -957,8 +1007,10 @@ $('#syncBtn').onclick = () => {
     await GH.load(); if (GH.cfg.token) await GH.push(); toast('Налаштування збережено');
   };
 };
-window.addEventListener('beforeunload', e => { GH.flush(); if (GH.pending()) { e.preventDefault(); e.returnValue = ''; } });
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') GH.flush(); });
+const SYNC = () => SHARED_URL ? SHARED : GH;
+window.addEventListener('beforeunload', e => { SYNC().flush(); if (SYNC().pending()) { e.preventDefault(); e.returnValue = ''; } });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') SYNC().flush(); });
+if (SHARED_URL) $('#syncBtn').hidden = true;
 
 // ---------- misc ----------
 function setStatus(cls, text) { const s = $('#status'); s.className = cls; s.textContent = text; }
@@ -973,7 +1025,7 @@ window.addEventListener('resize', applyView);
 
 if (fresh) { persist(false); lastSnap = JSON.stringify(S); render(); fit(); setTimeout(fit, 300); } else render();
 if (S.needsLayout) { delete S.needsLayout; autoLayout(); undoStack.length = 0; }
-GH.load();
+SYNC().load();
 })();
 </script>
 </body>
