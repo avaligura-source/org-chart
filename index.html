@@ -915,7 +915,9 @@ const GH = (() => {
   }
   return {
     cfg, ready,
-    schedule() { if (!ready() || !cfg.token) return; setStatus('busy', 'Є незбережені в GitHub зміни…'); clearTimeout(timer); timer = setTimeout(push, 2500); },
+    schedule() {
+      if (ready() && !cfg.token) { setStatus('busy', 'Збережено лише в цьому браузері — підключи ☁ GitHub'); return; }
+      if (!ready()) return; setStatus('busy', 'Є незбережені в GitHub зміни…'); clearTimeout(timer); timer = setTimeout(push, 2500); },
     flush() { if (timer) { clearTimeout(timer); timer = null; push(); } },
     pending: () => !!timer || busy,
     save(c) { Object.assign(cfg, c); localStorage.setItem(GH_KEY, JSON.stringify(cfg)); sha = null; },
