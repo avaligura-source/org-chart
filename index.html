@@ -83,6 +83,16 @@
   .gtot i{font-style:normal;background:#fff;border:1px solid var(--border);border-radius:999px;padding:3px 10px;font-weight:650;font-size:13px;white-space:nowrap;box-shadow:var(--shadow)}
   .gtot i.md{color:var(--md)} .gtot i.mkt{color:#c46a00}
   .gtot i.pos{background:#e3f6ea;color:#137a3a;border-color:#bfe6cd} .gtot i.neg{background:#fde8e8;color:#c62828;border-color:#f5c6c6}
+  .hire{position:absolute;left:calc(100% + 120px);bottom:-6px;width:270px;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);padding:10px 12px;text-align:left;cursor:default;font-size:12.5px}
+  .hire-h{font-weight:650;font-size:13px;margin-bottom:6px;color:var(--md)}
+  .hire table{width:100%;border-collapse:collapse}
+  .hire td{padding:4px 0;border-bottom:1px solid #f0f1f3;color:var(--muted)}
+  .hire td:last-child{text-align:right;color:var(--text);font-weight:650}
+  .hire tr.sum td{color:var(--text)}
+  .hire td.pos{color:#137a3a} .hire td.neg{color:#c62828}
+  .hire input{width:64px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font:inherit;font-weight:650;text-align:right}
+  .hire-f{margin-top:7px;font-size:12px;color:var(--muted)}
+  .hire-f b{color:var(--text)}
   .unit-label .st{display:inline-flex;gap:4px;margin-left:8px;vertical-align:1px}
   .unit-label .st i{font-style:normal;background:rgba(255,255,255,.95);color:var(--text);border-radius:999px;padding:1px 7px;font-weight:600;font-size:11px}
   .unit-label .st i.md{color:var(--md)} .unit-label .st i.mkt{color:#c46a00}
@@ -184,6 +194,7 @@
 <script>
 (() => {
 const W = 170, H = 108, AV = 30;            // card size, avatar overhang
+const TOP_NAME = 'Creative Team';   // the top group card is always called this
 const KEY = 'orgchart.motion.v2', GH_KEY = 'orgchart.github';
 const COLORS = ['#2f6bff','#7c4dff','#e0457b','#f08c00','#1a9b4b','#0f9bb5','#8a6d3b','#5b616b'];
 const $ = s => document.querySelector(s);
@@ -213,7 +224,7 @@ function demo() {
   const md = ([n, t, note], x, y) => add(n, t, 'md', x, y, note ? {note} : {});
   const mkt = ([n, cap], x, y) => add(n, MKT, 'mkt', x, y, {tasks: cap});
   const cx = Math.round(((teams.length * TEAM - 50) / 2 - W / 2) / 10) * 10;
-  const root = add('Motion Team', 'New Structure', 'org', cx, 0);
+  const root = add(TOP_NAME, 'New Structure', 'org', cx, 0);
   teams.forEach(([team, color, mds, mkts], i) => {
     const x0 = i * TEAM;
     const a = mds.map((m, j) => md(m, x0, TOP + j * ROW)), b = mkts.map((m, j) => mkt(m, x0 + COL, TOP + j * ROW));
@@ -265,6 +276,10 @@ function normalize(s) {
     }
     s.v = 5;
   }
+  // the top group card (no incoming line) is always "Creative Team"
+  const inc = new Set(s.links.map(l => l.to));
+  const top = s.people.filter(q => q.kind === 'org' && !inc.has(q.id)).sort((a, b) => a.y - b.y)[0];
+  if (top) top.name = TOP_NAME;
   return s;
 }
 let S, fresh = false;
@@ -305,9 +320,12 @@ const unitById = id => S.units.find(u => u.id === id);
 const unitOf = id => S.units.find(u => u.members.includes(id));
 const nameOf = id => byId(id)?.name ?? unitById(id)?.name ?? '?';
 // totals for a group card: the top group card counts everyone, other group cards count what hangs below them
-function groupTotals(p) {
+function topOrg() {
   const incoming = new Set(S.links.map(l => l.to));
-  const top = S.people.filter(q => q.kind === 'org' && !incoming.has(q.id)).sort((a, b) => a.y - b.y)[0];
+  return S.people.filter(q => q.kind === 'org' && !incoming.has(q.id)).sort((a, b) => a.y - b.y)[0];
+}
+function groupTotals(p) {
+  const top = topOrg();
   let people;
   if (top && top.id === p.id) people = S.people;
   else {
@@ -348,7 +366,7 @@ const chevron = up => `<svg width="12" height="12" viewBox="0 0 24 24" fill="non
 function render() { applyView(); renderCards(); renderEdges(); renderUnits(); }
 
 function renderCards() {
-  const hidden = hiddenSet();
+  const hidden = hiddenSet(), topId = topOrg()?.id;
   cardsEl.innerHTML = S.people.filter(p => !hidden.has(p.id)).map(p => {
     const kids = childrenOf(p.id).length, t = +p.tasks || 0;
     return `<div class="card k-${p.kind || 'md'}${sel.people.has(p.id) ? ' sel' : ''}" data-id="${p.id}" style="left:${p.x}px;top:${p.y}px">
@@ -359,10 +377,42 @@ function renderCards() {
       ${kids ? `<button class="kids" data-act="toggle">${kids} ${chevron(!p.collapsed)}</button>` : ''}
       <div class="tasks${t ? '' : ' none'}"${p.kind === 'org' ? ' hidden' : ''}><button data-act="dec">−</button>&nbsp;<b>${t}</b>&nbsp;<span class="tw">${taskWord(t)}</span>&nbsp;<button data-act="inc">+</button></div>
       ${p.kind === 'org' ? (g => `<div class="gtot" title="Загалом: моушн дизайнери ${g.md}, CMM ${g.mkt}"><i class="md">MD ${g.md}</i><i class="mkt">CMM ${g.mkt}</i><i class="${g.md - g.mkt >= 0 ? 'pos' : 'neg'}">${g.md - g.mkt > 0 ? '+' : g.md - g.mkt < 0 ? '−' : ''}${Math.abs(g.md - g.mkt)}</i></div>`)(groupTotals(p)) : ''}
+      ${p.id === topId ? hireHTML(groupTotals(p)) : ''}
       <div class="handle" title="Потягни до іншої картки, щоб з'єднати"></div>
     </div>`;
   }).join('');
 }
+// hiring plan table next to the top group card
+const hiring = () => (S.hiring ||= {count: 4, per: 80});
+const signed = n => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n);
+function hireCalc(g) {
+  const h = hiring(), add = h.count * h.per, gap = g.md - g.mkt, after = gap + add;
+  return {add, gap, after, need: after < 0 && h.per > 0 ? Math.ceil(-after / h.per) : 0};
+}
+function hireHTML(g) {
+  const h = hiring(), c = hireCalc(g);
+  return `<div class="hire">
+    <div class="hire-h">Новий найм · моушн дизайнери</div>
+    <table>
+      <tr><td>Нових моушн дизайнерів</td><td><input type="number" min="0" data-hire="count" value="${h.count}"></td></tr>
+      <tr><td>Тасок на місяць кожен</td><td><input type="number" min="0" data-hire="per" value="${h.per}"></td></tr>
+      <tr class="sum"><td>Закриють тасок / міс</td><td data-h="add">+${c.add}</td></tr>
+      <tr><td>Зараз MD − CMM</td><td data-h="gap" class="${c.gap >= 0 ? 'pos' : 'neg'}">${signed(c.gap)}</td></tr>
+      <tr class="sum"><td>Після найму</td><td data-h="after" class="${c.after >= 0 ? 'pos' : 'neg'}">${signed(c.after)}</td></tr>
+    </table>
+    <div class="hire-f" data-h="need">${c.need ? `Щоб закрити повністю, треба ще <b>${c.need}</b> MD по ${h.per}` : 'Найм повністю закриває розрив ✓'}</div>
+  </div>`;
+}
+function refreshHire(el) {
+  const c = hireCalc(groupTotals(topOrg())), h = hiring(), set = (k, txt, cls) => { const td = el.querySelector(`[data-h="${k}"]`); td.innerHTML = txt; if (cls) td.className = cls; };
+  set('add', '+' + c.add); set('gap', signed(c.gap), c.gap >= 0 ? 'pos' : 'neg'); set('after', signed(c.after), c.after >= 0 ? 'pos' : 'neg');
+  set('need', c.need ? `Щоб закрити повністю, треба ще <b>${c.need}</b> MD по ${h.per}` : 'Найм повністю закриває розрив ✓');
+}
+cardsEl.addEventListener('input', e => {
+  const i = e.target.closest('[data-hire]'); if (!i) return;
+  hiring()[i.dataset.hire] = Math.max(0, parseInt(i.value) || 0); persist(); refreshHire(i.closest('.hire'));
+});
+cardsEl.addEventListener('change', e => { if (e.target.closest('[data-hire]')) commit(); });
 function taskWord(n) {
   const a = n % 10, b = n % 100;
   if (a === 1 && b !== 11) return 'таска';
@@ -501,7 +551,7 @@ function dropUnit(id, ids) {
   return best;
 }
 viewport.addEventListener('pointerdown', e => {
-  if (e.button !== 0 || e.target.closest('button')) return;
+  if (e.button !== 0 || e.target.closest('button, .hire')) return;
   const w = toWorld(e.clientX, e.clientY);
   const handle = e.target.closest('.handle'), card = e.target.closest('.card'),
         ulabel = e.target.closest('.unit-label'), hit = e.target.closest('[data-link]');
@@ -668,7 +718,7 @@ function openPerson(id, focus) {
       <div class="avatar" style="${p.photo ? '' : 'background:' + avatarColor(p)}">${avatarHTML(p)}</div>
       <div class="row" style="flex-wrap:wrap"><button class="tb" id="pPhoto">Завантажити фото</button>${p.photo ? '<button class="tb" id="pPhotoDel">Прибрати</button>' : ''}</div>
     </div>
-    <div class="field"><label>Імʼя</label><input type="text" id="pName" value="${esc(p.name)}"></div>
+    <div class="field"><label>Імʼя</label><input type="text" id="pName" value="${esc(p.name)}" ${p.id === topOrg()?.id ? 'disabled title="Назва верхньої картки завжди Creative Team"' : ''}></div>
     <div class="field"><label>Посада</label><input type="text" id="pTitle" value="${esc(p.title)}"></div>
     <div class="field"><label>Нотатка</label><textarea id="pNote" placeholder="Коментар, контекст…">${esc(p.note || '')}</textarea></div>
     <div class="field"><label>Роль</label><div class="kind-pick">${[['md','Моушн дизайнер'],['mkt','CMM'],['org','Група']].map(([k,l]) => `<button data-kind="${k}" class="${(p.kind || 'md') === k ? 'on' : ''}">${l}</button>`).join('')}</div></div>
@@ -780,7 +830,7 @@ async function takeShot() {
     // bounding box of everything drawn, in world coordinates
     const wr = world.getBoundingClientRect(), k = S.view.k;
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    world.querySelectorAll('.card, .unit, .unit-label, .gtot, .avatar').forEach(el => {
+    world.querySelectorAll('.card, .unit, .unit-label, .gtot, .avatar, .hire').forEach(el => {
       const r = el.getBoundingClientRect();
       x0 = Math.min(x0, (r.left - wr.left) / k); y0 = Math.min(y0, (r.top - wr.top) / k);
       x1 = Math.max(x1, (r.right - wr.left) / k); y1 = Math.max(y1, (r.bottom - wr.top) / k);
