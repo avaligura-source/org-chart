@@ -395,7 +395,7 @@
    "title": "CMM",
    "kind": "mkt",
    "tasks": 100,
-   "x": 920,
+   "x": 220,
    "y": 470
   },
   {
@@ -493,7 +493,8 @@
     "4cu8by0o",
     "m3fziij8",
     "cf3n4omq",
-    "pv3985fn"
+    "pv3985fn",
+    "6bibly45"
    ],
    "parent": "9ei2p3ce"
   },
@@ -582,7 +583,6 @@
    "members": [
     "g41ruwfi",
     "ig2vuefj",
-    "6bibly45",
     "8lbcpuvd",
     "bsz0bqvg"
    ],
@@ -611,7 +611,7 @@
   "x": 106.98481942089006,
   "y": 131.2797924855874
  },
- "updatedAt": 1789391002590,
+ "updatedAt": 1789392452725,
  "v": 5,
  "hiring": {
   "count": 4,
